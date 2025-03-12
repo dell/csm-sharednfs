@@ -56,6 +56,7 @@ type CsiNfsService struct {
 	nodeName        string
 
 	k8sclient *k8s.K8sClient
+	executor  Executor
 }
 
 func IsNFSStorageClass(parameters map[string]string) bool {
@@ -106,6 +107,7 @@ var nfsService *CsiNfsService
 func New(provisionerName string) Service {
 	nfsService = &CsiNfsService{
 		provisionerName: provisionerName,
+		executor:        &LocalExecutor{},
 	}
 	return nfsService
 }

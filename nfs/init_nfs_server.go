@@ -23,6 +23,18 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+//go:generate mockgen -destination=mocks/executor.go -package=mocks . Executor
+type Executor interface {
+	ExecuteCommand(name string, args ...string) ([]byte, error)
+}
+
+type LocalExecutor struct{}
+
+func (l *LocalExecutor) ExecuteCommand(name string, args ...string) ([]byte, error) {
+	cmd := exec.Command(name, args...)
+	return cmd.CombinedOutput()
+}
+
 // init_nfs_server uses systemctl to initialize an nfs server if necessary
 func (cs *CsiNfsService) initializeNfsServer() error {
 	log.Infof("checking status of nfs-server")
