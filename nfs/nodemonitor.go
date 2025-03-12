@@ -117,7 +117,7 @@ func (s *CsiNfsService) pinger(node *v1.Node) {
 			status.badPings++
 			status.goodPings = 0
 			if !status.inRecovery && status.badPings >= MaxBadPing {
-				log.Info("pinger: initiating node recover actions node %s", status.nodeIp)
+				log.Infof("pinger: initiating node recover actions node %s", status.nodeIp)
 				status.inRecovery = true
 				status.dumpingExports = true
 				// cal nodeRecovery to initiate the recovery process

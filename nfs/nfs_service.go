@@ -336,7 +336,7 @@ func (nfs *nfsServer) ExportMultipleNfsVolumes(ctx context.Context,
 		_, err := nfs.ExportNfsVolume(ctx, exportReq)
 		if err != nil {
 			unsuccessful = append(unsuccessful, volumeId)
-			log.Infof("ExportNfsVolume failed for id %d: %s", volumeId, err.Error())
+			log.Infof("ExportNfsVolume failed for id %s: %s", volumeId, err.Error())
 			lastError = err
 		} else {
 			successful = append(successful, volumeId)
@@ -366,7 +366,7 @@ func (nfs *nfsServer) UnexportMultipleNfsVolumes(ctx context.Context,
 		_, err := nfs.UnexportNfsVolume(ctx, unexportReq)
 		if err != nil {
 			unsuccessful = append(unsuccessful, volumeId)
-			log.Infof("UnexportNfsVolume failed for id %d: %s", volumeId, err.Error())
+			log.Infof("UnexportNfsVolume failed for id %s: %s", volumeId, err.Error())
 			lastError = err
 		} else {
 			successful = append(successful, volumeId)

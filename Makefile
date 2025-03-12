@@ -14,3 +14,6 @@
 build:
 	cd nfs/k8s && go build
 	cd nfs && go build
+
+unit-test:
+	go test -count 1 -cover ./...
