@@ -65,13 +65,14 @@ func IsNFSStorageClass(parameters map[string]string) bool {
 	return parameters["csi-nfs"] == "RWX"
 }
 
-func IsNFSVolumeID(volumeID string) bool {
-	return strings.HasPrefix(volumeID, CsiNfsPrefixDash)
+func hasNFSPrefix(id string) bool {
+	return strings.HasPrefix(id, CsiNfsPrefixDash)
 }
 
-func IsNFSSnapshotID(volumeID string) bool {
-	return strings.HasPrefix(volumeID, CsiNfsPrefixDash)
-}
+var (
+	IsNFSVolumeID   = hasNFSPrefix
+	IsNFSSnapshotID = hasNFSPrefix
+)
 
 func NFSToArrayVolumeID(id string) string {
 	return strings.TrimPrefix(id, CsiNfsPrefixDash)
@@ -119,19 +120,41 @@ func PutVcsiService(vcsi Service) {
 	nfsService.vcsi = vcsi
 }
 
-func PutMDService(md Service) {
-	nfsService.md = md
-}
-
+// ProcessMapSecretChange is not implemented.
 func (s *CsiNfsService) ProcessMapSecretChange() error {
 	return nil
 }
 
+// RegisterAdditionalServers is not implemented.
 func (s *CsiNfsService) RegisterAdditionalServers(server *grpc.Server) {
 }
 
+// VolumeIDToArrayID is not implemented.
 func (s *CsiNfsService) VolumeIDToArrayID(volID string) string {
 	return ""
+}
+
+//go:generate mockgen -destination=mocks/os.go -package=mocks . OSInterface
+type OSInterface interface {
+	Stat(string) (os.FileInfo, error)
+	Getenv(string) string
+	MkdirAll(string, os.FileMode) error
+}
+
+type OSImplementation struct{}
+
+var opSys OSInterface = &OSImplementation{}
+
+func (o *OSImplementation) Stat(filepath string) (os.FileInfo, error) {
+	return os.Stat(filepath)
+}
+
+func (o *OSImplementation) Getenv(envName string) string {
+	return os.Getenv(envName)
+}
+
+func (o *OSImplementation) MkdirAll(fileName string, perm os.FileMode) error {
+	return os.MkdirAll(fileName, perm)
 }
 
 // Validate the global variables.
@@ -143,7 +166,7 @@ func (s *CsiNfsService) validateGlobalVariables() error {
 		if NodeRoot == "" {
 			return fmt.Errorf("csi-nfs NodeRoot variable must be set; used for chroot into node; validated with /noderoot/etc/exports")
 		}
-		_, err := os.Stat(NodeRoot + "/etc/exports")
+		_, err := opSys.Stat(NodeRoot + "/etc/exports")
 		if err != nil {
 			return fmt.Errorf("could not stat NodeRoot/etc/exports - this file must exist for kernel nfs installations")
 		}
@@ -155,7 +178,7 @@ func (s *CsiNfsService) validateGlobalVariables() error {
 		return fmt.Errorf("DriverNamespace variable not set; this is used to find Services and EndpointSlices in the driver namespace")
 	}
 	if DriverName == "" {
-		return fmt.Errorf("DriverName not set. This is the value of the driver name in the csinode objects, e.g. csi-vxflexos.dellemc.com ")
+		return fmt.Errorf("DriverName not set. This is the value of the driver name in the csinode objects, e.g. csi-vxflexos.dellemc.com")
 	}
 	log.Infof("NodeRoot %s NfsExportDirectory %s DriverNamespace %s DriverName %s", NodeRoot, NfsExportDirectory, DriverNamespace, DriverName)
 	return nil
@@ -169,16 +192,16 @@ var (
 	DriverName         string // The name of the driver as reported to the CSI nodes (e.g. csi-vxflexos.dellemc.com)
 )
 
-func (s *CsiNfsService) BeforeServe(ctx context.Context, sp *gocsi.StoragePlugin, lis net.Listener) error {
+func (s *CsiNfsService) BeforeServe(ctx context.Context, _ *gocsi.StoragePlugin, _ net.Listener) error {
 	log.Infof("NFS BeforeServe called")
 	var err error
 
 	// Get the SP's operating mode and nodeName
 	s.mode = csictx.Getenv(ctx, gocsi.EnvVarMode)
 
-	s.nodeName = os.Getenv("X_CSI_NODE_NAME")
+	s.nodeName = opSys.Getenv("X_CSI_NODE_NAME")
 	if s.nodeName == "" {
-		s.nodeName = os.Getenv("NODE_NAME")
+		s.nodeName = opSys.Getenv("NODE_NAME")
 	}
 	if s.nodeName == "" {
 		panic("X_CSI_NODE_NAME or NODE_NAME environment variable not set")
@@ -194,7 +217,8 @@ func (s *CsiNfsService) BeforeServe(ctx context.Context, sp *gocsi.StoragePlugin
 	log.Info("Connecting to k8sapi")
 	s.k8sclient, err = k8s.Connect()
 	if err != nil {
-		log.Error(err)
+		log.Errorf("failed to initialize the kubernetes client in BeforeServe. err: %s", err.Error())
+		return err
 	}
 	log.Infof("csinfs: K8sClient connected... s.mode %s", s.mode)
 
@@ -209,7 +233,7 @@ func (s *CsiNfsService) BeforeServe(ctx context.Context, sp *gocsi.StoragePlugin
 	if len(nodeAddresses) > 0 {
 		s.nodeIPAddress = nodeAddresses[0].Address
 	}
-	s.podCIDR = os.Getenv("PodCIDR")
+	s.podCIDR = opSys.Getenv("PodCIDR")
 	if s.podCIDR == "" {
 		s.podCIDR = s.nodeIPAddress + "/8"
 	}
@@ -219,13 +243,13 @@ func (s *CsiNfsService) BeforeServe(ctx context.Context, sp *gocsi.StoragePlugin
 	if s.mode == "node" {
 
 		// Get the NfsExportDirectory if set and use it.
-		if os.Getenv("NfsExportDirectory") != "" {
-			NfsExportDirectory = os.Getenv("NfsExportDir")
+		if opSys.Getenv("NfsExportDirectory") != "" {
+			NfsExportDirectory = opSys.Getenv("NfsExportDir")
 		}
 		// Process the NfsExportDirectory
 		log.Infof("Looking for NFS Export Directory %s", NodeRoot+NfsExportDirectory)
-		if _, err = os.Stat(NodeRoot + NfsExportDirectory); err != nil {
-			err = os.MkdirAll(NodeRoot+NfsExportDirectory, 0777)
+		if _, err = opSys.Stat(NodeRoot + NfsExportDirectory); err != nil {
+			err = os.MkdirAll(NodeRoot+NfsExportDirectory, 0o777)
 			if err != nil {
 				log.Infof("MkdirAll %s failed: %s", NodeRoot+NfsExportDirectory, err.Error())
 			} else {
@@ -239,11 +263,14 @@ func (s *CsiNfsService) BeforeServe(ctx context.Context, sp *gocsi.StoragePlugin
 
 		// Start the NFS server listener
 		// TODO: make port configurable from environment
-		go startNfsServiceServer(s.nodeIPAddress, nfsServerPort)
-	} else {
-		s.startNodeMonitors()
+		go func() {
+			err := startNfsServiceServer(s.nodeIPAddress, nfsServerPort)
+			if err != nil {
+				log.Errorf("failed to start nfs service. err: %s", err.Error())
+			}
+		}()
 	}
-	return nil
+	return s.startNodeMonitors()
 }
 
 func (s *CsiNfsService) startNodeMonitors() error {
