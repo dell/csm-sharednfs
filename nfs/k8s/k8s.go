@@ -34,7 +34,7 @@ import (
 )
 
 type K8sClient struct {
-	Clientset *kubernetes.Clientset
+	Clientset kubernetes.Interface
 }
 
 // Connect connect establishes a connection with the k8s API server.
