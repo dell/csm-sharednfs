@@ -30,14 +30,13 @@ import (
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
-	//"google.golang.org/grpc/credentials"
-
-	// codes "google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
-	// status "google.golang.org/grpc/status"
+
+	"github.com/dell/csm-hbnfs/nfs/proto"
 )
 
 type nfsServer struct {
+	proto.UnimplementedNfsServer
 	// Embed the unimplemented server
 }
 
@@ -61,7 +60,7 @@ func startNfsServiceServer(ipAddress, port string) error {
 	}
 	grpcServer := grpc.NewServer()
 	log.Infof("csinfs: Calling RegisterNfsServer")
-	RegisterNfsServer(grpcServer, &nfsServer{})
+	proto.RegisterNfsServer(grpcServer, &nfsServer{})
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Errorf("csinfs: grpcServer.Serve failed: %s", err.Error())
 		return err
@@ -70,7 +69,7 @@ func startNfsServiceServer(ipAddress, port string) error {
 	return nil
 }
 
-func getNfsClient(ipaddress, port string) (NfsClient, error) {
+func getNfsClient(ipaddress, port string) (proto.NfsClient, error) {
 	// TODO: add support for ipv6, add support for closing the client
 	client, err := grpc.NewClient(ipaddress+":"+port, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	// below line is AI generated with deprecations
@@ -80,7 +79,7 @@ func getNfsClient(ipaddress, port string) (NfsClient, error) {
 		return nil, err
 	}
 
-	nfsClient := NewNfsClient(client)
+	nfsClient := proto.NewNfsClient(client)
 	return nfsClient, nil
 }
 
@@ -109,8 +108,8 @@ func (nfs *nfsServer) nfsUnlockPV(requestID string) {
 
 // ExportNfsVolume finds the array volume and then add an export entry in /etc/exports and then restart the NFS server.
 // The trick is in finding the volume. You actually need some array specific code to do that...
-func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *ExportNfsVolumeRequest) (*ExportNfsVolumeResponse, error) {
-	resp := &ExportNfsVolumeResponse{}
+func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsVolumeRequest) (*proto.ExportNfsVolumeResponse, error) {
+	resp := &proto.ExportNfsVolumeResponse{}
 	start := time.Now()
 	defer finish("ExportNfsVolume", req.VolumeId, start, ctx)
 	log.Infof("Received ExportNfsVolume request %s: %+v", req.VolumeId, req)
@@ -177,7 +176,7 @@ func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *ExportNfsVolumeR
 
 // UnexportNfsVolume is called to remove an export from the NFS mount table and remove the directory.
 // The req.VolumeId is the array volume ID, not the nfs volume ID.
-func (nfs *nfsServer) UnexportNfsVolume(ctx context.Context, req *UnexportNfsVolumeRequest) (*UnexportNfsVolumeResponse, error) {
+func (nfs *nfsServer) UnexportNfsVolume(ctx context.Context, req *proto.UnexportNfsVolumeRequest) (*proto.UnexportNfsVolumeResponse, error) {
 	start := time.Now()
 	defer finish("UnexportNfsVolume", req.VolumeId, start, ctx)
 	log.Infof("Received UnexportNfsVolume request: %+v", req)
@@ -189,7 +188,7 @@ func (nfs *nfsServer) UnexportNfsVolume(ctx context.Context, req *UnexportNfsVol
 	serviceName := req.UnexportNfsContext["ServiceName"]
 
 	// Remove the mount entry from /etc/exports.
-	resp := &UnexportNfsVolumeResponse{
+	resp := &proto.UnexportNfsVolumeResponse{
 		VolumeId:           req.VolumeId,
 		UnexportNfsContext: unexportContext,
 	}
@@ -256,11 +255,11 @@ func finish(method, requestId string, start time.Time, ctx context.Context) {
 // Ping just returns a response, with Ready boolean and an optional Status. Used by the controller
 // to check that nodes are in a good state.
 // Note: a problem
-func (nfs *nfsServer) Ping(ctx context.Context, req *PingRequest) (*PingResponse, error) {
+func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.PingResponse, error) {
 	requestId := getRequestIdFromContext(ctx)
 	start := time.Now()
 	defer finish("Ping", requestId, start, ctx)
-	resp := &PingResponse{}
+	resp := &proto.PingResponse{}
 	log.Debugf("received ping nodeIpAddress %s dumpAllExports %t", req.NodeIpAddress, req.DumpAllExports)
 	resp.Ready = true
 	resp.Status = ""
@@ -308,11 +307,11 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *PingRequest) (*PingResponse
 }
 
 // GetExports returns all exports matching the NfsExortDir
-func (nfs *nfsServer) GetExports(ctx context.Context, req *GetExportsRequest) (*GetExportsResponse, error) {
+func (nfs *nfsServer) GetExports(ctx context.Context, req *proto.GetExportsRequest) (*proto.GetExportsResponse, error) {
 	requestId := getRequestIdFromContext(ctx)
 	start := time.Now()
 	defer finish("GetExports", requestId, start, ctx)
-	resp := &GetExportsResponse{}
+	resp := &proto.GetExportsResponse{}
 	exports, err := GetExports(NfsExportDirectory)
 	resp.Exports = exports
 	return resp, err
@@ -320,8 +319,8 @@ func (nfs *nfsServer) GetExports(ctx context.Context, req *GetExportsRequest) (*
 
 // ExportMulitpleNfsVolumes will export multiple NFS volumes, using the same context for each.
 func (nfs *nfsServer) ExportMultipleNfsVolumes(ctx context.Context,
-	req *ExportMultipleNfsVolumesRequest,
-) (*ExportMultipleNfsVolumesResponse, error) {
+	req *proto.ExportMultipleNfsVolumesRequest,
+) (*proto.ExportMultipleNfsVolumesResponse, error) {
 	requestId := getRequestIdFromContext(ctx)
 	start := time.Now()
 	defer finish("ExportMultipleNfsVOlumes", requestId, start, ctx)
@@ -329,7 +328,7 @@ func (nfs *nfsServer) ExportMultipleNfsVolumes(ctx context.Context,
 	unsuccessful := make([]string, 0)
 	var lastError error
 	for _, volumeId := range req.VolumeIds {
-		exportReq := &ExportNfsVolumeRequest{
+		exportReq := &proto.ExportNfsVolumeRequest{
 			VolumeId:         volumeId,
 			ExportNfsContext: req.ExportNfsContext,
 		}
@@ -342,7 +341,7 @@ func (nfs *nfsServer) ExportMultipleNfsVolumes(ctx context.Context,
 			successful = append(successful, volumeId)
 		}
 	}
-	resp := &ExportMultipleNfsVolumesResponse{}
+	resp := &proto.ExportMultipleNfsVolumesResponse{}
 	resp.SuccessfulIds = successful
 	resp.UnsuccessfulIds = unsuccessful
 	resp.ExportNfsContext = req.ExportNfsContext
@@ -350,8 +349,8 @@ func (nfs *nfsServer) ExportMultipleNfsVolumes(ctx context.Context,
 }
 
 func (nfs *nfsServer) UnexportMultipleNfsVolumes(ctx context.Context,
-	req *UnexportMultipleNfsVolumesRequest,
-) (*UnexportMultipleNfsVolumesResponse, error) {
+	req *proto.UnexportMultipleNfsVolumesRequest,
+) (*proto.UnexportMultipleNfsVolumesResponse, error) {
 	requestId := getRequestIdFromContext(ctx)
 	start := time.Now()
 	defer finish("UnexportMultipleNfsVolumes", requestId, start, ctx)
@@ -359,7 +358,7 @@ func (nfs *nfsServer) UnexportMultipleNfsVolumes(ctx context.Context,
 	unsuccessful := make([]string, 0)
 	var lastError error
 	for _, volumeId := range req.VolumeIds {
-		unexportReq := &UnexportNfsVolumeRequest{
+		unexportReq := &proto.UnexportNfsVolumeRequest{
 			VolumeId:           volumeId,
 			UnexportNfsContext: req.ExportNfsContext,
 		}
@@ -372,7 +371,7 @@ func (nfs *nfsServer) UnexportMultipleNfsVolumes(ctx context.Context,
 			successful = append(successful, volumeId)
 		}
 	}
-	resp := &UnexportMultipleNfsVolumesResponse{}
+	resp := &proto.UnexportMultipleNfsVolumesResponse{}
 	resp.SuccessfulIds = successful
 	resp.UnsuccessfulIds = unsuccessful
 	resp.ExportNfsContext = req.ExportNfsContext

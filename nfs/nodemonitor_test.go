@@ -23,9 +23,9 @@ import (
 	"time"
 
 	k8s "github.com/dell/csm-hbnfs/nfs/k8s"
+	"github.com/dell/csm-hbnfs/nfs/mocks"
+	"github.com/dell/csm-hbnfs/nfs/proto"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
@@ -71,7 +71,7 @@ func TestPing(t *testing.T) {
 
 		createMockServer(t, ip, false)
 
-		req := &PingRequest{
+		req := &proto.PingRequest{
 			NodeIpAddress: ip,
 		}
 
@@ -93,7 +93,7 @@ func TestPing(t *testing.T) {
 
 		createMockServer(t, ip, true)
 
-		req := &PingRequest{
+		req := &proto.PingRequest{
 			NodeIpAddress: ip,
 		}
 
@@ -386,8 +386,8 @@ func createMockServer(t *testing.T, ip string, isError bool) {
 	baseServer := grpc.NewServer()
 	t.Cleanup(func() { baseServer.Stop() })
 
-	RegisterNfsServer(baseServer, &mockNfsServer{
-		isError: isError,
+	proto.RegisterNfsServer(baseServer, &mocks.MockNfsServer{
+		IsError: isError,
 	})
 	go func() {
 		if err := baseServer.Serve(lis); err != nil {
@@ -395,30 +395,4 @@ func createMockServer(t *testing.T, ip string, isError bool) {
 		}
 	}()
 
-}
-
-type mockNfsServer struct {
-	UnimplementedNfsServer
-
-	isError bool
-}
-
-func (m *mockNfsServer) Ping(ctx context.Context, req *PingRequest) (*PingResponse, error) {
-	if m.isError {
-		return nil, status.Errorf(codes.Internal, "unable to ping node")
-	}
-	return &PingResponse{Ready: true}, nil
-}
-
-func (m *mockNfsServer) GetExports(ctx context.Context, req *GetExportsRequest) (*GetExportsResponse, error) {
-	if m.isError {
-		return nil, status.Errorf(codes.Internal, "unable to get exports")
-	}
-
-	exports := []string{
-		"127.0.0.1:/export1",
-		"127.0.0.1:/export2",
-	}
-
-	return &GetExportsResponse{Exports: exports}, nil
 }

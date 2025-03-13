@@ -27,6 +27,8 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	log "github.com/sirupsen/logrus"
 	discoveryv1 "k8s.io/api/discovery/v1"
+
+	"github.com/dell/csm-hbnfs/nfs/proto"
 )
 
 var (
@@ -142,7 +144,7 @@ func (s *CsiNfsService) reassignVolume(slice *discoveryv1.EndpointSlice) bool {
 	go func() {
 		unexportNfsVolumeContext := make(map[string]string)
 		unexportNfsVolumeContext["csi.requestid"] = pvName
-		unexportNfsVolumeRequest := &UnexportNfsVolumeRequest{
+		unexportNfsVolumeRequest := &proto.UnexportNfsVolumeRequest{
 			VolumeId:           NFSToArrayVolumeID(pv.Spec.CSI.VolumeHandle),
 			UnexportNfsContext: unexportNfsVolumeContext,
 		}
@@ -229,7 +231,7 @@ func (s *CsiNfsService) reassignVolume(slice *discoveryv1.EndpointSlice) bool {
 	start = time.Now()
 	exportNfsVolumeContext := make(map[string]string)
 	exportNfsVolumeContext["csi.requestid"] = pvName
-	exportNfsVolumeRequest := &ExportNfsVolumeRequest{
+	exportNfsVolumeRequest := &proto.ExportNfsVolumeRequest{
 		VolumeId:         pv.Spec.CSI.VolumeHandle,
 		ExportNfsContext: exportNfsVolumeContext,
 	}

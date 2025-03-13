@@ -23,6 +23,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+
+	"github.com/dell/csm-hbnfs/nfs/proto"
 )
 
 type NodeStatus struct {
@@ -77,7 +79,7 @@ func (s *CsiNfsService) GetNodeStatus(nodeIpAddress string) *NodeStatus {
 	return nodeIpToStatus[nodeIpAddress]
 }
 
-func (s *CsiNfsService) ping(pingRequest *PingRequest) (*PingResponse, error) {
+func (s *CsiNfsService) ping(pingRequest *proto.PingRequest) (*proto.PingResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), PingTimeout)
 	defer cancel()
 	nodeClient, err := getNfsClient(pingRequest.NodeIpAddress, nfsServerPort)
@@ -95,7 +97,7 @@ func (s *CsiNfsService) getExports(nodeIp string) ([]string, error) {
 	if err != nil {
 		return make([]string, 0), err
 	}
-	req := &GetExportsRequest{}
+	req := &proto.GetExportsRequest{}
 	resp, err := nodeClient.GetExports(ctx, req)
 	if err != nil {
 		return make([]string, 0), err
@@ -118,7 +120,7 @@ func (s *CsiNfsService) pinger(node *v1.Node) {
 
 	// This endless loop pings the node to determine status
 	for {
-		pingRequest := &PingRequest{
+		pingRequest := &proto.PingRequest{
 			NodeIpAddress:  status.nodeIp,
 			DumpAllExports: status.dumpingExports,
 		}
