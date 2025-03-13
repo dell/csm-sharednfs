@@ -1,8 +1,6 @@
 module github.com/dell/csm-hbnfs
 
-go 1.23.0
-
-toolchain go1.23.5
+go 1.24
 
 require (
 	github.com/container-storage-interface/spec v1.8.0
@@ -42,7 +40,6 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.0 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.0 // indirect
