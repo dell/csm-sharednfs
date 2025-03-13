@@ -18,6 +18,7 @@ package nfs
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -44,9 +45,23 @@ var (
 
 // nodeIpToStatus has a map of nodeIp to it's status
 var nodeIpToStatus map[string]*NodeStatus
+var monitorMux sync.Mutex
 
 func init() {
 	nodeIpToStatus = make(map[string]*NodeStatus)
+}
+
+func setPingRate(rate time.Duration) {
+	monitorMux.Lock()
+	defer monitorMux.Unlock()
+	PingRate = rate
+}
+
+func getPingRate() time.Duration {
+	monitorMux.Lock()
+	defer monitorMux.Unlock()
+	return PingRate
+
 }
 
 func (s CsiNfsService) startNodeMonitor(node *v1.Node) {
@@ -135,7 +150,7 @@ func (s *CsiNfsService) pinger(node *v1.Node) {
 			}
 			status.inRecovery = false
 		}
-		time.Sleep(PingRate)
+		time.Sleep(getPingRate())
 	}
 }
 
