@@ -25,7 +25,10 @@ import (
 	k8s "github.com/dell/csm-hbnfs/nfs/k8s"
 	"github.com/dell/csm-hbnfs/nfs/mocks"
 	"github.com/dell/csm-hbnfs/nfs/proto"
+	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
@@ -37,7 +40,12 @@ func TestGetExports(t *testing.T) {
 
 		ip := "127.0.0.1"
 
-		createMockServer(t, ip, false)
+		server := mocks.NewMockNfsServer(gomock.NewController(t))
+		server.EXPECT().GetExports(gomock.Any(), gomock.Any()).Times(1).Return(&proto.GetExportsResponse{
+			Exports: []string{"127.0.0.1:/export1", "127.0.0.1:/export2"},
+		}, nil)
+
+		createMockServer(t, ip, server)
 
 		exports, err := s.getExports(ip)
 		if err != nil {
@@ -54,7 +62,9 @@ func TestGetExports(t *testing.T) {
 
 		ip := "127.0.0.1"
 
-		createMockServer(t, ip, true)
+		server := mocks.NewMockNfsServer(gomock.NewController(t))
+		server.EXPECT().GetExports(gomock.Any(), gomock.Any()).Times(1).Return(nil, status.Errorf(codes.Internal, "unable to get exports"))
+		createMockServer(t, ip, server)
 
 		_, err := s.getExports(ip)
 		if err == nil {
@@ -69,7 +79,9 @@ func TestPing(t *testing.T) {
 
 		ip := "127.0.0.1"
 
-		createMockServer(t, ip, false)
+		server := mocks.NewMockNfsServer(gomock.NewController(t))
+		server.EXPECT().Ping(gomock.Any(), gomock.Any()).Times(1).Return(&proto.PingResponse{Ready: true}, nil)
+		createMockServer(t, ip, server)
 
 		req := &proto.PingRequest{
 			NodeIpAddress: ip,
@@ -91,7 +103,9 @@ func TestPing(t *testing.T) {
 
 		ip := "127.0.0.1"
 
-		createMockServer(t, ip, true)
+		server := mocks.NewMockNfsServer(gomock.NewController(t))
+		server.EXPECT().Ping(gomock.Any(), gomock.Any()).Times(1).Return(nil, status.Errorf(codes.Internal, "unable to ping node"))
+		createMockServer(t, ip, server)
 
 		req := &proto.PingRequest{
 			NodeIpAddress: ip,
@@ -111,7 +125,8 @@ func TestGetNnodeExportCounts(t *testing.T) {
 
 		ip := "127.0.0.1"
 
-		createMockServer(t, ip, false)
+		server := mocks.NewMockNfsServer(gomock.NewController(t))
+		createMockServer(t, ip, server)
 
 		resp, err := s.getNodeExportCounts(context.Background())
 		if err != nil {
@@ -128,7 +143,11 @@ func TestGetNnodeExportCounts(t *testing.T) {
 
 		ip := "127.0.0.1"
 
-		createMockServer(t, ip, false)
+		server := mocks.NewMockNfsServer(gomock.NewController(t))
+		server.EXPECT().GetExports(gomock.Any(), gomock.Any()).Times(1).Return(&proto.GetExportsResponse{
+			Exports: []string{"127.0.0.1:/export1", "127.0.0.1:/export2"},
+		}, nil)
+		createMockServer(t, ip, server)
 		nodeIpToStatus[ip] = &NodeStatus{
 			nodeName: "myNode",
 			nodeIp:   ip,
@@ -151,7 +170,11 @@ func TestGetNnodeExportCounts(t *testing.T) {
 
 		ip := "127.0.0.1"
 
-		createMockServer(t, ip, false)
+		server := mocks.NewMockNfsServer(gomock.NewController(t))
+		server.EXPECT().GetExports(gomock.Any(), gomock.Any()).Times(1).Return(&proto.GetExportsResponse{
+			Exports: []string{"127.0.0.1:/export1", "127.0.0.1:/export2"},
+		}, nil)
+		createMockServer(t, ip, server)
 		nodeIpToStatus[ip] = &NodeStatus{
 			nodeName:   "myNode",
 			nodeIp:     ip,
@@ -195,7 +218,9 @@ func TestPinger(t *testing.T) {
 
 		ip := "127.0.0.1"
 
-		createMockServer(t, ip, false)
+		server := mocks.NewMockNfsServer(gomock.NewController(t))
+		server.EXPECT().Ping(gomock.Any(), gomock.Any()).Times(1).Return(&proto.PingResponse{Ready: true}, nil)
+		createMockServer(t, ip, server)
 		req := &v1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "myNode",
@@ -227,7 +252,11 @@ func TestPinger(t *testing.T) {
 
 		ip := "127.0.0.1"
 
-		createMockServer(t, ip, true)
+		server := mocks.NewMockNfsServer(gomock.NewController(t))
+		server.EXPECT().Ping(gomock.Any(), gomock.Any()).Times(3).Return(&proto.PingResponse{Ready: false}, nil)
+		server.EXPECT().GetExports(gomock.Any(), gomock.Any()).Times(1).Return(nil, status.Errorf(codes.Internal, "unable to get exports"))
+
+		createMockServer(t, ip, server)
 
 		req := &v1.Node{
 			ObjectMeta: metav1.ObjectMeta{
@@ -243,10 +272,9 @@ func TestPinger(t *testing.T) {
 			},
 		}
 
-		// PingRate = 1 * time.Second
 		setPingRate(1 * time.Second)
 		go s.pinger(req)
-		time.Sleep(4 * time.Second)
+		time.Sleep(3 * time.Second)
 	})
 }
 
@@ -375,7 +403,7 @@ func TestGetNodeStatus(t *testing.T) {
 	})
 }
 
-func createMockServer(t *testing.T, ip string, isError bool) {
+func createMockServer(t *testing.T, ip string, mockServer *mocks.MockNfsServer) {
 	lis, err := net.Listen("tcp", ip+":"+nfsServerPort)
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
@@ -386,9 +414,7 @@ func createMockServer(t *testing.T, ip string, isError bool) {
 	baseServer := grpc.NewServer()
 	t.Cleanup(func() { baseServer.Stop() })
 
-	proto.RegisterNfsServer(baseServer, &mocks.MockNfsServer{
-		IsError: isError,
-	})
+	proto.RegisterNfsServer(baseServer, mockServer)
 	go func() {
 		if err := baseServer.Serve(lis); err != nil {
 			t.Errorf("Failed to serve: %v", err)
