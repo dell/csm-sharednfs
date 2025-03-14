@@ -54,6 +54,7 @@ type CsiNfsService struct {
 	nodeIPAddress   string
 	podCIDR         string
 	nodeName        string
+	failureRetries	int
 
 	k8sclient *k8s.K8sClient
 	executor  Executor
@@ -108,6 +109,7 @@ func New(provisionerName string) Service {
 	nfsService = &CsiNfsService{
 		provisionerName: provisionerName,
 		executor:        &LocalExecutor{},
+		failureRetries: 10,
 	}
 	return nfsService
 }

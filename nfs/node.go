@@ -52,7 +52,7 @@ func (ns *CsiNfsService) NodePublishVolume(ctx context.Context, req *csi.NodePub
 	retries := 0
 	startTime := time.Now()
 	defer log.Infof("NodePublishVolume %s completed in %s %d retries error: %v", req.VolumeId, time.Now().Sub(startTime), retries, err)
-	for retries := 0; retries < 10; retries++ {
+	for retries := 0; retries < ns.failureRetries; retries++ {
 		resp, err = ns.nodePublishVolume(ctx, req)
 		if err == nil {
 			return resp, err
@@ -91,8 +91,7 @@ func (ns *CsiNfsService) nodePublishVolume(ctx context.Context, req *csi.NodePub
 	target := req.TargetPath
 	// Make sure the target exists
 	log.Infof("Making directory for target path %s", target)
-	mkdirCommand := exec.Command("mkdir", "-p", target)
-	output, err := mkdirCommand.CombinedOutput()
+	output, err := ns.executor.ExecuteCommand("mkdir", "-p", target)
 	if err != nil {
 		log.Errorf("Target path %s not created: %s ... proceeding anyway: %s \n", target, err, string(output))
 		// Unmount the target directory
@@ -102,8 +101,7 @@ func (ns *CsiNfsService) nodePublishVolume(ctx context.Context, req *csi.NodePub
 	}
 
 	log.Info("Changing permissions of target path")
-	chmodCommand := exec.Command("chmod", "02777", target)
-	_, err = chmodCommand.CombinedOutput()
+	_, err = ns.executor.ExecuteCommand("chmod", "02777", target)
 	if err != nil {
 		log.Errorf("Chmod target path failed: %s: \n%s", err, string(output))
 	}
@@ -115,8 +113,7 @@ func (ns *CsiNfsService) nodePublishVolume(ctx context.Context, req *csi.NodePub
 	// cmd := exec.Command("mount", "-t", "nfs4", mountSource, target)
 	mountContext, mountCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer mountCancel()
-	cmd := exec.CommandContext(mountContext, "mount", "-t", "nfs4", mountSource, target)
-	output, err = cmd.CombinedOutput()
+	output, err = ns.executor.ExecuteCommandContext(mountContext, "mount", "-t", "nfs4", mountSource, target)
 	// TODO maybe put fsType nfs4 in gofsutil
 	// err := gofsutil.Mount(ctx, mountSource, req.TargetPath, "nfs4")
 	if err != nil {
@@ -157,8 +154,7 @@ func (ns *CsiNfsService) NodeUnpublishVolume(ctx context.Context, req *csi.NodeU
 
 	// Unmount the target directory
 	log.Infof("Attempting to unmount %s for volume %s", target, req.VolumeId)
-	cmd := exec.Command("umount", "--force", target)
-	out, err := cmd.CombinedOutput()
+	out, err := ns.executor.ExecuteCommand("umount", "--force", target)
 	if err != nil && !strings.Contains(err.Error(), "exit status 32") {
 		log.Infof("csi-nfs NodeUnpublish umount target %s: error: %s\n%s", target, err, string(out))
 		return &csi.NodeUnpublishVolumeResponse{}, err

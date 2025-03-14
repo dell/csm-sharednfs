@@ -10,6 +10,7 @@
 package mocks
 
 import (
+	context "context"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
@@ -57,4 +58,24 @@ func (mr *MockExecutorMockRecorder) ExecuteCommand(name any, args ...any) *gomoc
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{name}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecuteCommand", reflect.TypeOf((*MockExecutor)(nil).ExecuteCommand), varargs...)
+}
+
+// ExecuteCommandContext mocks base method.
+func (m *MockExecutor) ExecuteCommandContext(context context.Context, name string, args ...string) ([]byte, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{context, name}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "ExecuteCommandContext", varargs...)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ExecuteCommandContext indicates an expected call of ExecuteCommandContext.
+func (mr *MockExecutorMockRecorder) ExecuteCommandContext(context, name any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{context, name}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecuteCommandContext", reflect.TypeOf((*MockExecutor)(nil).ExecuteCommandContext), varargs...)
 }

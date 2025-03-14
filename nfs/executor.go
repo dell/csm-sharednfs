@@ -16,15 +16,23 @@ limitations under the License.
 
 package nfs
 
-import "os/exec"
+import (
+	"context"
+	"os/exec"
+)
 
 //go:generate mockgen -destination=mocks/executor.go -package=mocks github.com/dell/csm-hbnfs/nfs Executor
 type Executor interface {
 	ExecuteCommand(name string, args ...string) ([]byte, error)
+	ExecuteCommandContext(context context.Context, name string, args ...string) ([]byte, error)
 }
 
 type LocalExecutor struct{}
 
 func (l *LocalExecutor) ExecuteCommand(name string, args ...string) ([]byte, error) {
 	return exec.Command(name, args...).CombinedOutput()
+}
+
+func(l *LocalExecutor) ExecuteCommandContext(context context.Context, name string, args ...string) ([]byte, error) {
+	return exec.CommandContext(context, name, args...).Output()
 }
