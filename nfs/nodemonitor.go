@@ -39,30 +39,38 @@ type NodeStatus struct {
 }
 
 var (
-	PingRate          = 15 * time.Second
-	PingTimeout       = 10 * time.Second
 	GetExportsTimeout = 5 * time.Second
-	MaxBadPing        = 2
 )
+
+var Pinger = struct {
+	rate       time.Duration
+	timeout    time.Duration
+	maxBadPing int
+	monitorMux *sync.Mutex
+}{
+	rate:       15 * time.Second,
+	timeout:    10 * time.Second,
+	maxBadPing: 2,
+	monitorMux: &sync.Mutex{},
+}
 
 // nodeIpToStatus has a map of nodeIp to it's status
 var nodeIpToStatus map[string]*NodeStatus
-var monitorMux sync.Mutex
 
 func init() {
 	nodeIpToStatus = make(map[string]*NodeStatus)
 }
 
 func setPingRate(rate time.Duration) {
-	monitorMux.Lock()
-	defer monitorMux.Unlock()
-	PingRate = rate
+	Pinger.monitorMux.Lock()
+	defer Pinger.monitorMux.Unlock()
+	Pinger.rate = rate
 }
 
 func getPingRate() time.Duration {
-	monitorMux.Lock()
-	defer monitorMux.Unlock()
-	return PingRate
+	Pinger.monitorMux.Lock()
+	defer Pinger.monitorMux.Unlock()
+	return Pinger.rate
 
 }
 
@@ -80,7 +88,7 @@ func (s *CsiNfsService) GetNodeStatus(nodeIpAddress string) *NodeStatus {
 }
 
 func (s *CsiNfsService) ping(pingRequest *proto.PingRequest) (*proto.PingResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), PingTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), Pinger.timeout)
 	defer cancel()
 	nodeClient, err := getNfsClient(pingRequest.NodeIpAddress, nfsServerPort)
 	if err != nil {
@@ -132,7 +140,7 @@ func (s *CsiNfsService) pinger(node *v1.Node) {
 			status.online = false
 			status.badPings++
 			status.goodPings = 0
-			if !status.inRecovery && status.badPings >= MaxBadPing {
+			if !status.inRecovery && status.badPings >= Pinger.maxBadPing {
 				log.Infof("pinger: initiating node recover actions node %s", status.nodeIp)
 				status.inRecovery = true
 				status.dumpingExports = true

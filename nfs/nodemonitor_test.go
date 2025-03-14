@@ -19,6 +19,7 @@ package nfs
 import (
 	"context"
 	"net"
+	"reflect"
 	"testing"
 	"time"
 
@@ -35,247 +36,280 @@ import (
 )
 
 func TestGetExports(t *testing.T) {
-	t.Run("Test GetExports with Valid NFS server", func(t *testing.T) {
-		s := CsiNfsService{}
+	tests := []struct {
+		name    string
+		ip      string
+		want    []string
+		wantErr bool
+	}{
+		{
+			name:    "Test GetExports with Valid NFS server",
+			ip:      "127.0.0.1",
+			want:    []string{"127.0.0.1:/export1", "127.0.0.1:/export2"},
+			wantErr: false,
+		},
+		{
+			name:    "Test GetExports with Invalid NFS server",
+			ip:      "127.0.0.2",
+			want:    []string{},
+			wantErr: true,
+		},
+	}
 
-		ip := "127.0.0.1"
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := CsiNfsService{}
 
-		server := mocks.NewMockNfsServer(gomock.NewController(t))
-		server.EXPECT().GetExports(gomock.Any(), gomock.Any()).Times(1).Return(&proto.GetExportsResponse{
-			Exports: []string{"127.0.0.1:/export1", "127.0.0.1:/export2"},
-		}, nil)
+			server := mocks.NewMockNfsServer(gomock.NewController(t))
+			if tt.wantErr {
+				server.EXPECT().GetExports(gomock.Any(), gomock.Any()).Times(1).Return(nil, status.Errorf(codes.Internal, "failed to get exports"))
+			} else {
+				server.EXPECT().GetExports(gomock.Any(), gomock.Any()).Times(1).Return(&proto.GetExportsResponse{
+					Exports: tt.want,
+				}, nil)
+			}
 
-		createMockServer(t, ip, server)
+			createMockServer(t, tt.ip, server)
 
-		exports, err := s.getExports(ip)
-		if err != nil {
-			t.Error(err)
-		}
-
-		if len(exports) == 0 {
-			t.Error("no exports found")
-		}
-	})
-
-	t.Run("Test GetExports with Valid NFS server", func(t *testing.T) {
-		s := CsiNfsService{}
-
-		ip := "127.0.0.1"
-
-		server := mocks.NewMockNfsServer(gomock.NewController(t))
-		server.EXPECT().GetExports(gomock.Any(), gomock.Any()).Times(1).Return(nil, status.Errorf(codes.Internal, "unable to get exports"))
-		createMockServer(t, ip, server)
-
-		_, err := s.getExports(ip)
-		if err == nil {
-			t.Error(err)
-		}
-	})
+			exports, err := s.getExports(tt.ip)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("getExports() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(exports, tt.want) {
+				t.Errorf("getExports() = %v, want %v", exports, tt.want)
+			}
+		})
+	}
 }
 
 func TestPing(t *testing.T) {
-	t.Run("Test Ping with Valid NFS server", func(t *testing.T) {
-		s := CsiNfsService{}
+	tests := []struct {
+		name    string
+		ip      string
+		want    *proto.PingResponse
+		wantErr bool
+	}{
+		{
+			name:    "Test Ping with Valid NFS server",
+			ip:      "127.0.0.1",
+			want:    &proto.PingResponse{Ready: true},
+			wantErr: false,
+		},
+		{
+			name:    "Test Ping with Invalid NFS server",
+			ip:      "127.0.0.2",
+			want:    nil,
+			wantErr: true,
+		},
+	}
 
-		ip := "127.0.0.1"
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := CsiNfsService{}
 
-		server := mocks.NewMockNfsServer(gomock.NewController(t))
-		server.EXPECT().Ping(gomock.Any(), gomock.Any()).Times(1).Return(&proto.PingResponse{Ready: true}, nil)
-		createMockServer(t, ip, server)
+			server := mocks.NewMockNfsServer(gomock.NewController(t))
+			if tt.wantErr {
+				server.EXPECT().Ping(gomock.Any(), gomock.Any()).Times(1).Return(nil, status.Errorf(codes.Internal, "failed to get exports"))
+			} else {
+				server.EXPECT().Ping(gomock.Any(), gomock.Any()).Times(1).Return(&proto.PingResponse{
+					Ready: true,
+				}, nil)
+			}
 
-		req := &proto.PingRequest{
-			NodeIpAddress: ip,
-		}
+			createMockServer(t, tt.ip, server)
 
-		resp, err := s.ping(req)
-		if err != nil {
-			t.Error(err)
-		}
+			req := &proto.PingRequest{
+				NodeIpAddress: tt.ip,
+			}
 
-		if !resp.Ready {
-			t.Fatal("node not ready")
-		}
+			resp, err := s.ping(req)
+			if (err != nil) && !tt.wantErr {
+				t.Errorf("ping() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
 
-	})
-
-	t.Run("Fail - Test Ping with Invalid NFS server, invalid response", func(t *testing.T) {
-		s := CsiNfsService{}
-
-		ip := "127.0.0.1"
-
-		server := mocks.NewMockNfsServer(gomock.NewController(t))
-		server.EXPECT().Ping(gomock.Any(), gomock.Any()).Times(1).Return(nil, status.Errorf(codes.Internal, "unable to ping node"))
-		createMockServer(t, ip, server)
-
-		req := &proto.PingRequest{
-			NodeIpAddress: ip,
-		}
-
-		_, err := s.ping(req)
-		if err == nil {
-			t.Fatal(err)
-		}
-
-	})
+			if !tt.wantErr && resp.Ready != tt.want.Ready {
+				t.Errorf("ping() = %v, want %v", resp, tt.want)
+			}
+		})
+	}
 }
 
-func TestGetNnodeExportCounts(t *testing.T) {
-	t.Run("Success - Test GetNnodeExportCounts, empty list", func(t *testing.T) {
-		s := CsiNfsService{}
+func TestGetNodeExportCounts(t *testing.T) {
+	localHostIP := "127.0.0.1"
 
-		ip := "127.0.0.1"
+	tests := []struct {
+		name         string
+		ip           string
+		createServer func(t *testing.T)
+		want         map[string]int
+		wantErr      bool
+	}{
+		{
+			name: "Success - Test GetNodeExportCounts, empty list",
+			createServer: func(t *testing.T) {
+				server := mocks.NewMockNfsServer(gomock.NewController(t))
+				createMockServer(t, localHostIP, server)
+			},
+			want:    map[string]int{},
+			wantErr: false,
+		},
+		{
+			name: "Success - Test GetNodeExportCounts, valid response",
+			createServer: func(t *testing.T) {
+				server := mocks.NewMockNfsServer(gomock.NewController(t))
+				server.EXPECT().GetExports(gomock.Any(), gomock.Any()).Times(1).Return(&proto.GetExportsResponse{
+					Exports: []string{"127.0.0.1:/export1", "127.0.0.1:/export2"},
+				}, nil)
+				createMockServer(t, localHostIP, server)
+				nodeIpToStatus[localHostIP] = &NodeStatus{
+					nodeName: "myNode",
+					nodeIp:   localHostIP,
+					online:   true,
+					status:   "",
+				}
+			},
+			want:    map[string]int{"myNode": 2},
+			wantErr: false,
+		},
+		{
+			name: "Success - Test GetNodeExportCounts, inRecovery",
+			createServer: func(t *testing.T) {
+				server := mocks.NewMockNfsServer(gomock.NewController(t))
+				server.EXPECT().GetExports(gomock.Any(), gomock.Any()).Times(1).Return(&proto.GetExportsResponse{
+					Exports: []string{"127.0.0.1:/export1", "127.0.0.1:/export2"},
+				}, nil)
+				createMockServer(t, localHostIP, server)
+				nodeIpToStatus[localHostIP] = &NodeStatus{
+					nodeName:   "myNode",
+					nodeIp:     localHostIP,
+					online:     true,
+					status:     "",
+					inRecovery: true,
+				}
+			},
+			want:    map[string]int{},
+			wantErr: false,
+		},
+	}
 
-		server := mocks.NewMockNfsServer(gomock.NewController(t))
-		createMockServer(t, ip, server)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := CsiNfsService{}
 
-		resp, err := s.getNodeExportCounts(context.Background())
-		if err != nil {
-			t.Error(err)
-		}
+			tt.createServer(t)
 
-		if len(resp) != 0 {
-			t.Error("exports located when they shouldn't have been.")
-		}
-	})
+			// Give it time for the server to setup
+			time.Sleep(50 * time.Millisecond)
 
-	t.Run("Success - Test GetNnodeExportCounts, valid response", func(t *testing.T) {
-		s := CsiNfsService{}
+			resp, err := s.getNodeExportCounts(context.Background())
+			if (err != nil) != tt.wantErr {
+				t.Errorf("getNodeExportCounts() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
 
-		ip := "127.0.0.1"
-
-		server := mocks.NewMockNfsServer(gomock.NewController(t))
-		server.EXPECT().GetExports(gomock.Any(), gomock.Any()).Times(1).Return(&proto.GetExportsResponse{
-			Exports: []string{"127.0.0.1:/export1", "127.0.0.1:/export2"},
-		}, nil)
-		createMockServer(t, ip, server)
-		nodeIpToStatus[ip] = &NodeStatus{
-			nodeName: "myNode",
-			nodeIp:   ip,
-			online:   true,
-			status:   "",
-		}
-
-		resp, err := s.getNodeExportCounts(context.Background())
-		if err != nil {
-			t.Error(err)
-		}
-
-		if len(resp) == 0 {
-			t.Error("no exports found")
-		}
-	})
-
-	t.Run("Success - Test GetNnodeExportCounts, inRecovery", func(t *testing.T) {
-		s := CsiNfsService{}
-
-		ip := "127.0.0.1"
-
-		server := mocks.NewMockNfsServer(gomock.NewController(t))
-		server.EXPECT().GetExports(gomock.Any(), gomock.Any()).Times(1).Return(&proto.GetExportsResponse{
-			Exports: []string{"127.0.0.1:/export1", "127.0.0.1:/export2"},
-		}, nil)
-		createMockServer(t, ip, server)
-		nodeIpToStatus[ip] = &NodeStatus{
-			nodeName:   "myNode",
-			nodeIp:     ip,
-			online:     true,
-			status:     "",
-			inRecovery: true,
-		}
-
-		resp, err := s.getNodeExportCounts(context.Background())
-		if err != nil {
-			t.Error(err)
-		}
-
-		// Since it is inRecovery, no exports should be found
-		if len(resp) != 0 {
-			t.Error("inRecovery - no exports should be found")
-		}
-	})
+			if !reflect.DeepEqual(resp, tt.want) {
+				t.Errorf("getNodeExportCounts() = %v, want %v", resp, tt.want)
+			}
+		})
+	}
 }
 
 func TestPinger(t *testing.T) {
-	t.Run("Fail - No address in node", func(t *testing.T) {
-		s := CsiNfsService{}
-
-		// No need to create a server since no calls are made.
-		req := &v1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "myNode",
+	localHostIP := "127.0.0.1"
+	tests := []struct {
+		name         string
+		createServer func(t *testing.T)
+		request      *v1.Node
+		pingRate     time.Duration
+		timeout      time.Duration
+	}{
+		{
+			name:         "Fail - No address in node",
+			createServer: func(t *testing.T) {},
+			request: &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "myNode",
+				},
+				Status: v1.NodeStatus{
+					Addresses: []v1.NodeAddress{},
+				},
 			},
-			Status: v1.NodeStatus{
-				Addresses: []v1.NodeAddress{},
+			pingRate: 15 * time.Second,
+			timeout:  5 * time.Millisecond,
+		},
+		{
+			name: "Success - No address in node",
+			createServer: func(t *testing.T) {
+				server := mocks.NewMockNfsServer(gomock.NewController(t))
+				server.EXPECT().Ping(gomock.Any(), gomock.Any()).Times(1).Return(&proto.PingResponse{Ready: true}, nil)
+				createMockServer(t, localHostIP, server)
 			},
-		}
-
-		// No return value but since there is no addresses, it should cover the error case.
-		go s.pinger(req)
-	})
-
-	t.Run("Success - No address in node", func(t *testing.T) {
-		s := CsiNfsService{}
-
-		ip := "127.0.0.1"
-
-		server := mocks.NewMockNfsServer(gomock.NewController(t))
-		server.EXPECT().Ping(gomock.Any(), gomock.Any()).Times(1).Return(&proto.PingResponse{Ready: true}, nil)
-		createMockServer(t, ip, server)
-		req := &v1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "myNode",
-			},
-			Status: v1.NodeStatus{
-				Addresses: []v1.NodeAddress{
-					{
-						Type:    v1.NodeInternalIP,
-						Address: ip,
+			request: &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "myNode",
+				},
+				Status: v1.NodeStatus{
+					Addresses: []v1.NodeAddress{
+						{
+							Type:    v1.NodeInternalIP,
+							Address: localHostIP,
+						},
 					},
 				},
 			},
-		}
+			pingRate: 15 * time.Second,
+			timeout:  1 * time.Second,
+		},
+		{
+			name: "Success - Recovery attempt",
+			createServer: func(t *testing.T) {
+				server := mocks.NewMockNfsServer(gomock.NewController(t))
+				server.EXPECT().Ping(gomock.Any(), gomock.Any()).Times(3).Return(&proto.PingResponse{Ready: false}, nil)
+				server.EXPECT().GetExports(gomock.Any(), gomock.Any()).Times(1).Return(nil, status.Errorf(codes.Internal, "unable to get exports"))
 
-		// No return value but since there is no addresses, it should cover the error case.
-		go s.pinger(req)
-		time.Sleep(1 * time.Second)
-	})
-
-	t.Run("Success - Recovery attempt", func(t *testing.T) {
-		// Create a new fake clientset
-		clientset := fake.NewSimpleClientset()
-
-		s := CsiNfsService{
-			k8sclient: &k8s.K8sClient{
-				Clientset: clientset,
+				createMockServer(t, localHostIP, server)
 			},
-		}
-
-		ip := "127.0.0.1"
-
-		server := mocks.NewMockNfsServer(gomock.NewController(t))
-		server.EXPECT().Ping(gomock.Any(), gomock.Any()).Times(3).Return(&proto.PingResponse{Ready: false}, nil)
-		server.EXPECT().GetExports(gomock.Any(), gomock.Any()).Times(1).Return(nil, status.Errorf(codes.Internal, "unable to get exports"))
-
-		createMockServer(t, ip, server)
-
-		req := &v1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "myNode",
-			},
-			Status: v1.NodeStatus{
-				Addresses: []v1.NodeAddress{
-					{
-						Type:    v1.NodeInternalIP,
-						Address: ip,
+			request: &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "myNode",
+				},
+				Status: v1.NodeStatus{
+					Addresses: []v1.NodeAddress{
+						{
+							Type:    v1.NodeInternalIP,
+							Address: localHostIP,
+						},
 					},
 				},
 			},
-		}
+			pingRate: 1 * time.Second,
+			timeout:  3 * time.Second,
+		},
+	}
 
-		setPingRate(1 * time.Second)
-		go s.pinger(req)
-		time.Sleep(3 * time.Second)
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a new fake clientset
+			clientset := fake.NewSimpleClientset()
+
+			s := CsiNfsService{
+				k8sclient: &k8s.K8sClient{
+					Clientset: clientset,
+				},
+			}
+
+			tt.createServer(t)
+
+			// Give it time for the server to setup
+			time.Sleep(50 * time.Millisecond)
+
+			setPingRate(tt.pingRate)
+			go s.pinger(tt.request)
+			time.Sleep(tt.timeout)
+		})
+	}
 }
 
 func TestIsControlPlaneNode(t *testing.T) {
@@ -330,77 +364,111 @@ func TestIsControlPlaneNode(t *testing.T) {
 }
 
 func TestStartNodeMonitor(t *testing.T) {
-	// Test case: startNodeMonitor should not do anything if the node is a control plane node
-	t.Run("ControlPlaneNode", func(t *testing.T) {
-		s := CsiNfsService{}
-		node := &v1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "control-plane-node",
-			},
-			Spec: v1.NodeSpec{
-				Taints: []v1.Taint{
-					{
-						Key: "node-role.kubernetes.io/control-plane",
+	tests := []struct {
+		name      string
+		nfsServer *CsiNfsService
+		node      *v1.Node
+	}{
+		{
+			name: "Success: ControlPlaneNode",
+			nfsServer: func() *CsiNfsService {
+				s := &CsiNfsService{}
+				return s
+			}(),
+			node: &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "control-plane-node",
+				},
+				Spec: v1.NodeSpec{
+					Taints: []v1.Taint{
+						{
+							Key: "node-role.kubernetes.io/control-plane",
+						},
 					},
 				},
 			},
-		}
-
-		s.startNodeMonitor(node)
-	})
-	// Test case: startNodeMonitor should start the pinger goroutine if the node is not a control plane node
-	t.Run("NonControlPlaneNode", func(t *testing.T) {
-		s := CsiNfsService{}
-		node := &v1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "non-control-plane-node",
-			},
-			Spec: v1.NodeSpec{
-				Taints: []v1.Taint{
-					{
-						Key: "NonControlPlaneNodeTaint",
+		},
+		{
+			name: "Success: NonControlPlaneNode",
+			nfsServer: func() *CsiNfsService {
+				s := &CsiNfsService{}
+				return s
+			}(),
+			node: &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "non-control-plane-node",
+				},
+				Spec: v1.NodeSpec{
+					Taints: []v1.Taint{
+						{
+							Key: "NonControlPlaneNodeTaint",
+						},
 					},
 				},
 			},
-		}
+		},
+	}
 
-		s.startNodeMonitor(node)
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.nfsServer.startNodeMonitor(tt.node)
+		})
+	}
 }
 
 func TestGetNodeStatus(t *testing.T) {
-	t.Run("Success: Valid IPs", func(t *testing.T) {
-		s := &CsiNfsService{}
-		nodeStatus := &NodeStatus{
-			nodeName: "myNode",
-			nodeIp:   "127.0.0.1",
-		}
+	tests := []struct {
+		name       string
+		nfsServer  *CsiNfsService
+		nodeIp     string
+		wantStatus *NodeStatus
+	}{
+		{
+			name: "Success: Valid IPs",
+			nfsServer: func() *CsiNfsService {
+				s := &CsiNfsService{}
+				nodeStatus := &NodeStatus{
+					nodeName: "myNode",
+					nodeIp:   "127.0.0.1",
+				}
 
-		nodeIpToStatus["127.0.0.1"] = nodeStatus
+				nodeIpToStatus["127.0.0.1"] = nodeStatus
 
-		status := s.GetNodeStatus("127.0.0.1")
+				return s
+			}(),
+			nodeIp: "127.0.0.1",
+			wantStatus: &NodeStatus{
+				nodeName: "myNode",
+				nodeIp:   "127.0.0.1",
+			},
+		},
+		{
+			name: "Success: IP not found",
+			nfsServer: func() *CsiNfsService {
+				s := &CsiNfsService{}
+				nodeStatus := &NodeStatus{
+					nodeName: "myNode",
+					nodeIp:   "127.0.0.1",
+				}
 
-		if status != nodeStatus {
-			t.Errorf("Expected same status, got %v", status)
-		}
-	})
+				nodeIpToStatus[nodeStatus.nodeIp] = nodeStatus
 
-	t.Run("Success: IP not found", func(t *testing.T) {
-		s := &CsiNfsService{}
-		nodeStatus := &NodeStatus{
-			nodeName: "myNode",
-			nodeIp:   "127.0.0.1",
-		}
+				return s
+			}(),
+			nodeIp:     "127.0.0.2",
+			wantStatus: nil,
+		},
+	}
 
-		nodeIpToStatus[nodeStatus.nodeIp] = nodeStatus
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			status := tt.nfsServer.GetNodeStatus(tt.nodeIp)
 
-		// Look for a different node IP
-		status := s.GetNodeStatus("127.0.0.2")
-
-		if status != nil {
-			t.Errorf("Expected nil status, got %v", status)
-		}
-	})
+			if !reflect.DeepEqual(status, tt.wantStatus) {
+				t.Errorf("GetNodeStatus() = %v, want %v", status, tt.wantStatus)
+			}
+		})
+	}
 }
 
 func createMockServer(t *testing.T, ip string, mockServer *mocks.MockNfsServer) {
