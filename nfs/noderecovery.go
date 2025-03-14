@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -37,7 +38,7 @@ var (
 )
 
 // exportCounts is a map of node name to number of mounts
-var exportCounts map[string]int
+var exportCounts map[string]int = make(map[string]int)
 
 // nodeRecovery is called as a goroutine from the pinger when it determines a node is down.
 // nodeRecovery is responsible for reassigning all the nfs volumes on the failed node to new servers.
@@ -120,9 +121,9 @@ func (s *CsiNfsService) reassignVolume(slice *discoveryv1.EndpointSlice) bool {
 	log.Infof("reassignVolume %s clients %v", pv.Name, clients)
 
 	// Loop through the available nodes and see which one has the lowest count
-	lowest := 999999999
+	lowest := math.MaxInt
 	var selectedNode string
-	var aboveThreshold bool
+	aboveThreshold := false
 	exportCountsLock.Lock()
 	for nodeName, exportCount := range exportCounts {
 		if exportCount < lowest {
