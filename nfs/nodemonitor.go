@@ -18,31 +18,41 @@ package nfs
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+
+	"github.com/dell/csm-hbnfs/nfs/proto"
 )
 
 type NodeStatus struct {
 	nodeName       string
 	nodeIp         string
 	badPings       int
-	error          error
 	goodPings      int
 	inRecovery     bool
 	online         bool
 	status         string
 	dumpingExports bool
-	numberExports  int
 }
 
 var (
-	PingRate          = 15 * time.Second
-	PingTimeout       = 10 * time.Second
 	GetExportsTimeout = 5 * time.Second
-	MaxBadPing        = 2
 )
+
+var Pinger = struct {
+	rate       time.Duration
+	timeout    time.Duration
+	maxBadPing int
+	monitorMux *sync.Mutex
+}{
+	rate:       15 * time.Second,
+	timeout:    10 * time.Second,
+	maxBadPing: 2,
+	monitorMux: &sync.Mutex{},
+}
 
 // nodeIpToStatus has a map of nodeIp to it's status
 var nodeIpToStatus map[string]*NodeStatus
@@ -51,10 +61,24 @@ func init() {
 	nodeIpToStatus = make(map[string]*NodeStatus)
 }
 
+func setPingRate(rate time.Duration) {
+	Pinger.monitorMux.Lock()
+	defer Pinger.monitorMux.Unlock()
+	Pinger.rate = rate
+}
+
+func getPingRate() time.Duration {
+	Pinger.monitorMux.Lock()
+	defer Pinger.monitorMux.Unlock()
+	return Pinger.rate
+
+}
+
 func (s CsiNfsService) startNodeMonitor(node *v1.Node) {
 	if isControlPlaneNode(node) {
 		return
 	}
+
 	go s.pinger(node)
 }
 
@@ -63,8 +87,8 @@ func (s *CsiNfsService) GetNodeStatus(nodeIpAddress string) *NodeStatus {
 	return nodeIpToStatus[nodeIpAddress]
 }
 
-func (s *CsiNfsService) ping(pingRequest *PingRequest) (*PingResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), PingTimeout)
+func (s *CsiNfsService) ping(pingRequest *proto.PingRequest) (*proto.PingResponse, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), Pinger.timeout)
 	defer cancel()
 	nodeClient, err := getNfsClient(pingRequest.NodeIpAddress, nfsServerPort)
 	if err != nil {
@@ -81,7 +105,7 @@ func (s *CsiNfsService) getExports(nodeIp string) ([]string, error) {
 	if err != nil {
 		return make([]string, 0), err
 	}
-	req := &GetExportsRequest{}
+	req := &proto.GetExportsRequest{}
 	resp, err := nodeClient.GetExports(ctx, req)
 	if err != nil {
 		return make([]string, 0), err
@@ -104,7 +128,7 @@ func (s *CsiNfsService) pinger(node *v1.Node) {
 
 	// This endless loop pings the node to determine status
 	for {
-		pingRequest := &PingRequest{
+		pingRequest := &proto.PingRequest{
 			NodeIpAddress:  status.nodeIp,
 			DumpAllExports: status.dumpingExports,
 		}
@@ -116,7 +140,7 @@ func (s *CsiNfsService) pinger(node *v1.Node) {
 			status.online = false
 			status.badPings++
 			status.goodPings = 0
-			if !status.inRecovery && status.badPings >= MaxBadPing {
+			if !status.inRecovery && status.badPings >= Pinger.maxBadPing {
 				log.Infof("pinger: initiating node recover actions node %s", status.nodeIp)
 				status.inRecovery = true
 				status.dumpingExports = true
@@ -136,13 +160,13 @@ func (s *CsiNfsService) pinger(node *v1.Node) {
 			}
 			status.inRecovery = false
 		}
-		time.Sleep(PingRate)
+		time.Sleep(getPingRate())
 	}
 }
 
 // getNodeExportCounts will return a map of Node Name to number of nfs volumes that are exported
 // if the nodes are online.
-func (s *CsiNfsService) getNodeExportCounts(ctx context.Context) (map[string]int, error) {
+func (s *CsiNfsService) getNodeExportCounts(_ context.Context) (map[string]int, error) {
 	numberNodes := len(nodeIpToStatus)
 	done := make(chan bool, numberNodes)
 	exportsMap := make(map[string]int, 0)
@@ -161,10 +185,12 @@ func (s *CsiNfsService) getNodeExportCounts(ctx context.Context) (map[string]int
 		}()
 		nnodes++
 	}
+
 	log.Infof("waiting on getExports completion")
-	for i := 0; i < nnodes; i++ {
-		_ = <-done
+	for range nnodes {
+		<-done
 	}
+
 	return exportsMap, nil
 }
 

@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/dell/csm-hbnfs/nfs/proto"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -249,14 +250,14 @@ func (cs *CsiNfsService) makeNfsService(ctx context.Context, namespace, name str
 	log.Infof("Host driver successfully published volume %s to node %s PublishContext %s", req.VolumeId, req.NodeId, subpublishResponse.PublishContext)
 
 	// Send a request to the node to mount the volume
-	exportNfsVolumeRequest := &ExportNfsVolumeRequest{
+	exportNfsVolumeRequest := &proto.ExportNfsVolumeRequest{
 		// volumeID was changed in subseq previous, change back
 		VolumeId:         ArrayToNFSVolumeID(req.VolumeId),
 		ExportNfsContext: req.VolumeContext,
 	}
 	exportNfsVolumeRequest.ExportNfsContext[ServiceName] = name
 	maps.Copy(exportNfsVolumeRequest.ExportNfsContext, subpublishResponse.PublishContext)
-	var nodeResponse *ExportNfsVolumeResponse
+	var nodeResponse *proto.ExportNfsVolumeResponse
 	var nodeError error
 	var nodeDone bool
 	go func() {
@@ -397,7 +398,7 @@ func (cs *CsiNfsService) removeNodeFromNfsService(ctx context.Context, service *
 	return (nclients == 0), service, err
 }
 
-func (cs *CsiNfsService) callExportNfsVolume(ctx context.Context, nodeIPAddress string, exportNfsVolumeRequest *ExportNfsVolumeRequest) (*ExportNfsVolumeResponse, error) {
+func (cs *CsiNfsService) callExportNfsVolume(ctx context.Context, nodeIPAddress string, exportNfsVolumeRequest *proto.ExportNfsVolumeRequest) (*proto.ExportNfsVolumeResponse, error) {
 	requestId := getRequestIdFromContext(ctx)
 	start := time.Now()
 	defer finish("callExportNfsVolume", requestId, start, ctx)
@@ -414,7 +415,7 @@ func (cs *CsiNfsService) callExportNfsVolume(ctx context.Context, nodeIPAddress 
 	return exportNfsVolumeResponse, err
 }
 
-func (cs *CsiNfsService) callUnexportNfsVolume(ctx context.Context, nodeIPAddress string, unexportNfsVolumeRequest *UnexportNfsVolumeRequest) (*UnexportNfsVolumeResponse, error) {
+func (cs *CsiNfsService) callUnexportNfsVolume(ctx context.Context, nodeIPAddress string, unexportNfsVolumeRequest *proto.UnexportNfsVolumeRequest) (*proto.UnexportNfsVolumeResponse, error) {
 	requestId := getRequestIdFromContext(ctx)
 	start := time.Now()
 	defer finish("callUnexportNfsVolume", requestId, start, ctx)
@@ -474,7 +475,7 @@ func (cs *CsiNfsService) ControllerUnpublishVolume(ctx context.Context, req *csi
 		log.Infof("ControllerUnpublish removing last node %s: %s", req.VolumeId, nodeIpAddress)
 		unexportNfsVolumeContext := make(map[string]string)
 		// Call the Node to unpublish the volume completely
-		unexportNfsReq := &UnexportNfsVolumeRequest{
+		unexportNfsReq := &proto.UnexportNfsVolumeRequest{
 			VolumeId:           req.VolumeId,
 			UnexportNfsContext: unexportNfsVolumeContext,
 		}
