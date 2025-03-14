@@ -1,0 +1,18 @@
+# CODEOWNERS
+#
+# Documentation for this file can be found at:
+# https://help.github.com/en/articles/about-code-owners
+
+# These are the default owners for the code and will
+# be requested for review when someone opens a pull request.
+# Order is alphabetical for easier maintenance.
+#
+# Bharath Sreekanth (bharathsreekanth)
+# Fernando Alfaro Campos (falfaroc)
+# Harshita Pandey (harshitap26)
+# Luke Lau (lukeatdell)
+# Luna Xu (xuluna)
+# Trevor Dawe (tdawe)
+
+# for all files
+* @bharathsreekanth @falfaroc @harshitap26 @lukeatdell @xuluna @tdawe
