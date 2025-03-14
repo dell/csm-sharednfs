@@ -351,7 +351,7 @@ func (cs *CsiNfsService) makeNfsService(ctx context.Context, namespace, name str
 	// Wait on the node processing to complete
 	for !nodeDone {
 		log.Infof("waiting on node done %s %s...", nodeIPAddress, name)
-		time.Sleep(10 * time.Second)
+		time.Sleep(cs.waitCreateNfsServiceInterval)
 	}
 	if nodeError != nil {
 		// Retry the call to ExportNfsVolume if the first attempt failed
