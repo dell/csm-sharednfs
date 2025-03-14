@@ -24,13 +24,13 @@ import (
 	"strings"
 	"testing"
 
-	csictx "github.com/dell/gocsi/context"
-
 	k8s "github.com/dell/csm-hbnfs/nfs/k8s"
 	"github.com/dell/csm-hbnfs/nfs/mocks"
 	"github.com/dell/gocsi"
+	csictx "github.com/dell/gocsi/context"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -165,27 +165,59 @@ func TestNFSToArrayVolumeID(t *testing.T) {
 	}
 }
 
-// func TestVolumeIDToServiceName(t *testing.T) {
-// 	type args struct {
-// 		id string
-// 	}
-// 	tests := []struct {
-// 		name string
-// 		args args
-// 		want string
-// 	}{
-// 		{
-// 			name: "",
-// 		},
-// 	}
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			if got := VolumeIDToServiceName(tt.args.id); got != tt.want {
-// 				t.Errorf("VolumeIDToServiceName() = %v, want %v", got, tt.want)
-// 			}
-// 		})
-// 	}
-// }
+func TestVolumeIDToServiceName(t *testing.T) {
+	type args struct {
+		id string
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{
+			name: "valid ID",
+			args: args{
+				id: "csm-hbnfs-valid-id-123",
+			},
+			want: "csm-hbnfs-valid-id-123",
+		},
+		{
+			name: "sanitizes an ID with illegal chars",
+			args: args{
+				id: "csm_hbnfs_id_123",
+			},
+			want: "csm-hbnfs-id-123",
+		},
+		{
+			name: "sanitizes an ID that starts with an illegal char",
+			args: args{
+				id: "-_-csm_hbnfs_id_123_-_",
+			},
+			want: "csm-hbnfs-id-123",
+		},
+		{
+			name: "converts uppercase to lowercase",
+			args: args{
+				id: "CSM_HBNFS_ID_123",
+			},
+			want: "csm-hbnfs-id-123",
+		},
+		{
+			name: "truncates an ID that is longer than 63 chars",
+			args: args{
+				id: "this-string-is-33-characters-longthis-string-is-33-characters-long",
+			},
+			want: "this-string-is-33-characters-longthis-string-is-33-characters-l",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := VolumeIDToServiceName(tt.args.id); got != tt.want {
+				t.Errorf("VolumeIDToServiceName() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
 
 func TestArrayToNFSVolumeID(t *testing.T) {
 	type args struct {
@@ -508,13 +540,18 @@ func TestCsiNfsService_BeforeServe(t *testing.T) {
 	defaultOpSys := opSys
 	defaultDriverNamespace := DriverNamespace
 	defaultDriverName := DriverName
+	defaultNodeRoot := NodeRoot
+	defaultNfsExportDirectory := NfsExportDirectory
 	defaultNewForConfigFunc := k8s.NewForConfigFunc
 	defaultRestInClusterConfigFunc := k8s.RestInClusterConfigFunc
+
 	// restore defaults after each tests case
 	afterEach := func() {
 		opSys = defaultOpSys
 		DriverNamespace = defaultDriverNamespace
 		DriverName = defaultDriverName
+		NodeRoot = defaultNodeRoot
+		NfsExportDirectory = defaultNfsExportDirectory
 		k8s.NewForConfigFunc = defaultNewForConfigFunc
 		k8s.RestInClusterConfigFunc = defaultRestInClusterConfigFunc
 	}
@@ -577,7 +614,7 @@ func TestCsiNfsService_BeforeServe(t *testing.T) {
 			},
 			before: func(tc *testCase) {
 				os := mocks.NewMockOSInterface(gomock.NewController(t))
-				os.EXPECT().Getenv("X_CSI_NODE_NAME").Times(1).Return("worker-1")
+				os.EXPECT().Getenv("X_CSI_NODE_NAME").Times(1).Return("ctrl-plane-1")
 				opSys = os
 
 				// for validateGlobalVars func
@@ -602,7 +639,7 @@ func TestCsiNfsService_BeforeServe(t *testing.T) {
 			},
 			before: func(tc *testCase) {
 				os := mocks.NewMockOSInterface(gomock.NewController(t))
-				os.EXPECT().Getenv("X_CSI_NODE_NAME").Times(1).Return("worker-1")
+				os.EXPECT().Getenv("X_CSI_NODE_NAME").Times(1).Return("ctrl-plane-1")
 				opSys = os
 
 				// for validateGlobalVars func
@@ -626,7 +663,7 @@ func TestCsiNfsService_BeforeServe(t *testing.T) {
 			wantErrMsg: "not found",
 		},
 		{
-			name:   "",
+			name:   "successful controller before serve",
 			fields: fields{},
 			args: args{
 				ctx: context.Background(),
@@ -635,7 +672,8 @@ func TestCsiNfsService_BeforeServe(t *testing.T) {
 			},
 			before: func(tc *testCase) {
 				os := mocks.NewMockOSInterface(gomock.NewController(t))
-				os.EXPECT().Getenv("X_CSI_NODE_NAME").Times(1).Return("worker-1")
+				os.EXPECT().Getenv("X_CSI_NODE_NAME").Times(1).Return("ctrl-plane-1")
+				os.EXPECT().Getenv("PodCIDR").Times(1).Return("")
 				opSys = os
 
 				// for validateGlobalVars func
@@ -647,7 +685,25 @@ func TestCsiNfsService_BeforeServe(t *testing.T) {
 					t.Errorf("failed to set env var for mode. err: %s", err.Error())
 				}
 
+				// Create a fake client and add a fake node to that client
 				clientSet := fake.NewClientset()
+				_, err = clientSet.CoreV1().Nodes().Create(context.Background(), &v1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "ctrl-plane-1",
+					},
+					Status: v1.NodeStatus{
+						Addresses: []v1.NodeAddress{
+							{
+								Type:    v1.NodeHostName,
+								Address: "127.0.0.1",
+							},
+						},
+					},
+				}, metav1.CreateOptions{})
+				if err != nil {
+					t.Errorf("failed to create node with fake clientset for testing. err: %s", err.Error())
+				}
+
 				k8s.RestInClusterConfigFunc = func() (*rest.Config, error) {
 					return new(rest.Config), nil
 				}
@@ -655,8 +711,207 @@ func TestCsiNfsService_BeforeServe(t *testing.T) {
 					return clientSet, nil
 				}
 			},
-			wantErr:    true,
-			wantErrMsg: "not found",
+			wantErr:    false,
+			wantErrMsg: "",
+		},
+		{
+			name:   "successful node before serve",
+			fields: fields{},
+			args: args{
+				ctx: context.Background(),
+				sp:  nil,
+				lis: nil,
+			},
+			before: func(tc *testCase) {
+				// for validateGlobalVars func
+				DriverNamespace = "powerstore"
+				DriverName = "csi-powerstore.dellemc.com"
+				NodeRoot = "/noderoot"
+				NfsExportDirectory = "/var/lib/dell/nfs"
+
+				// mocking OS calls to file system
+				os := mocks.NewMockOSInterface(gomock.NewController(t))
+				os.EXPECT().Stat(NodeRoot+"/etc/exports").Times(1).Return(nil, nil)
+				os.EXPECT().Getenv(EnvCSINodeName).Times(1).Return("worker-1")
+				os.EXPECT().Getenv(EnvPodCIDR).Times(1).Return("")
+				os.EXPECT().Stat(NodeRoot+NfsExportDirectory).Times(1).Return(nil, errors.New("mocked error"))
+				os.EXPECT().MkdirAll(gomock.Any(), gomock.Any()).Times(1).Return(nil)
+				opSys = os
+
+				err := csictx.Setenv(tc.args.ctx, gocsi.EnvVarMode, "node")
+				if err != nil {
+					t.Errorf("failed to set env var for mode. err: %s", err.Error())
+				}
+
+				// Create a fake client and add a fake node to that client
+				clientSet := fake.NewClientset()
+				_, err = clientSet.CoreV1().Nodes().Create(context.Background(), &v1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "worker-1",
+					},
+					Status: v1.NodeStatus{
+						Addresses: []v1.NodeAddress{
+							{
+								Type:    v1.NodeHostName,
+								Address: "127.0.0.1",
+							},
+						},
+					},
+				}, metav1.CreateOptions{})
+				if err != nil {
+					t.Errorf("failed to create node with fake clientset for testing. err: %s", err.Error())
+				}
+
+				k8s.RestInClusterConfigFunc = func() (*rest.Config, error) {
+					return new(rest.Config), nil
+				}
+				k8s.NewForConfigFunc = func(config *rest.Config) (kubernetes.Interface, error) {
+					return clientSet, nil
+				}
+
+				// mocks for initializeNfsServer
+				executor := mocks.NewMockExecutor(gomock.NewController(t))
+				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server").
+					Times(1).Return([]byte("Active: active"), nil)
+				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-mountd").
+					Times(1).Return([]byte("Active: active"), nil)
+				tc.fields.executor = executor
+			},
+			wantErr:    false,
+			wantErrMsg: "",
+		},
+		{
+			name:   "node fails to make nfs export dir",
+			fields: fields{},
+			args: args{
+				ctx: context.Background(),
+				sp:  nil,
+				lis: nil,
+			},
+			before: func(tc *testCase) {
+				// for validateGlobalVars func
+				DriverNamespace = "powerstore"
+				DriverName = "csi-powerstore.dellemc.com"
+				NodeRoot = "/noderoot"
+				NfsExportDirectory = "/var/lib/dell/nfs"
+
+				// mocking OS calls to file system
+				os := mocks.NewMockOSInterface(gomock.NewController(t))
+				os.EXPECT().Stat(NodeRoot+"/etc/exports").Times(1).Return(nil, nil)
+				os.EXPECT().Getenv(EnvCSINodeName).Times(1).Return("worker-1")
+				os.EXPECT().Getenv(EnvPodCIDR).Times(1).Return("")
+				os.EXPECT().Stat(NodeRoot+NfsExportDirectory).Times(1).Return(nil, errors.New("mocked error"))
+				os.EXPECT().MkdirAll(gomock.Any(), gomock.Any()).Times(1).Return(errors.New("mocked error"))
+				opSys = os
+
+				err := csictx.Setenv(tc.args.ctx, gocsi.EnvVarMode, "node")
+				if err != nil {
+					t.Errorf("failed to set env var for mode. err: %s", err.Error())
+				}
+
+				// Create a fake client and add a fake node to that client
+				clientSet := fake.NewClientset()
+				_, err = clientSet.CoreV1().Nodes().Create(context.Background(), &v1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "worker-1",
+					},
+					Status: v1.NodeStatus{
+						Addresses: []v1.NodeAddress{
+							{
+								Type:    v1.NodeHostName,
+								Address: "127.0.0.1",
+							},
+						},
+					},
+				}, metav1.CreateOptions{})
+				if err != nil {
+					t.Errorf("failed to create node with fake clientset for testing. err: %s", err.Error())
+				}
+
+				k8s.RestInClusterConfigFunc = func() (*rest.Config, error) {
+					return new(rest.Config), nil
+				}
+				k8s.NewForConfigFunc = func(config *rest.Config) (kubernetes.Interface, error) {
+					return clientSet, nil
+				}
+
+				// mocks for initializeNfsServer
+				executor := mocks.NewMockExecutor(gomock.NewController(t))
+				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server").
+					Times(1).Return([]byte("Active: active"), nil)
+				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-mountd").
+					Times(1).Return([]byte("Active: active"), nil)
+				tc.fields.executor = executor
+			},
+			wantErr:    false,
+			wantErrMsg: "",
+		},
+		{
+			name:   "node fails to initialize the nfs server",
+			fields: fields{},
+			args: args{
+				ctx: context.Background(),
+				sp:  nil,
+				lis: nil,
+			},
+			before: func(tc *testCase) {
+				// for validateGlobalVars func
+				DriverNamespace = "powerstore"
+				DriverName = "csi-powerstore.dellemc.com"
+				NodeRoot = "/noderoot"
+				NfsExportDirectory = "/var/lib/dell/nfs"
+
+				// mocking OS calls to file system
+				os := mocks.NewMockOSInterface(gomock.NewController(t))
+				os.EXPECT().Stat(NodeRoot+"/etc/exports").Times(1).Return(nil, nil)
+				os.EXPECT().Getenv(EnvCSINodeName).Times(1).Return("worker-1")
+				os.EXPECT().Getenv(EnvPodCIDR).Times(1).Return("")
+				os.EXPECT().Stat(NodeRoot+NfsExportDirectory).Times(1).Return(nil, errors.New("mocked error"))
+				os.EXPECT().MkdirAll(gomock.Any(), gomock.Any()).Times(1).Return(nil)
+				opSys = os
+
+				err := csictx.Setenv(tc.args.ctx, gocsi.EnvVarMode, "node")
+				if err != nil {
+					t.Errorf("failed to set env var for mode. err: %s", err.Error())
+				}
+
+				// Create a fake client and add a fake node to that client
+				clientSet := fake.NewClientset()
+				_, err = clientSet.CoreV1().Nodes().Create(context.Background(), &v1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "worker-1",
+					},
+					Status: v1.NodeStatus{
+						Addresses: []v1.NodeAddress{
+							{
+								Type:    v1.NodeHostName,
+								Address: "127.0.0.1",
+							},
+						},
+					},
+				}, metav1.CreateOptions{})
+				if err != nil {
+					t.Errorf("failed to create node with fake clientset for testing. err: %s", err.Error())
+				}
+
+				k8s.RestInClusterConfigFunc = func() (*rest.Config, error) {
+					return new(rest.Config), nil
+				}
+				k8s.NewForConfigFunc = func(config *rest.Config) (kubernetes.Interface, error) {
+					return clientSet, nil
+				}
+
+				// mocks for initializeNfsServer
+				executor := mocks.NewMockExecutor(gomock.NewController(t))
+				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server").
+					Times(1).Return(nil, errors.New("mocked error"))
+				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-mountd").
+					Times(1).Return([]byte("Active: active"), nil)
+				executor.EXPECT().ExecuteCommand("cp", "/nfs.conf", "/noderoot/tmp/nfs.conf").Times(1).Return(nil, errors.New("mock error"))
+				tc.fields.executor = executor
+			},
+			wantErr:    false,
+			wantErrMsg: "",
 		},
 	}
 	for _, tt := range tests {
@@ -686,6 +941,74 @@ func TestCsiNfsService_BeforeServe(t *testing.T) {
 					t.Errorf("CsiNfsService.BeforeServe() error = %v, wantErr %v", err, tt.wantErrMsg)
 				}
 			}
+		})
+	}
+}
+
+func TestCsiNfsService_ProcessMapSecretChange(t *testing.T) {
+	tests := []struct {
+		name    string
+		wantErr bool
+	}{
+		{
+			name:    "placeholder test",
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &CsiNfsService{}
+			if err := s.ProcessMapSecretChange(); (err != nil) != tt.wantErr {
+				t.Errorf("CsiNfsService.ProcessMapSecretChange() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestCsiNfsService_VolumeIDToArrayID(t *testing.T) {
+	type args struct {
+		volID string
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{
+			name: "placeholder test",
+			args: args{""},
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &CsiNfsService{}
+			if got := s.VolumeIDToArrayID(tt.args.volID); got != tt.want {
+				t.Errorf("CsiNfsService.VolumeIDToArrayID() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCsiNfsService_RegisterAdditionalServers(t *testing.T) {
+	type args struct {
+		server *grpc.Server
+	}
+	tests := []struct {
+		name string
+		args args
+	}{
+		{
+			name: "placeholder test",
+			args: args{
+				server: nil,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &CsiNfsService{}
+			s.RegisterAdditionalServers(tt.args.server)
 		})
 	}
 }
