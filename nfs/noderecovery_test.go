@@ -19,9 +19,12 @@ package nfs
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	k8s "github.com/dell/csm-hbnfs/nfs/k8s"
 	"github.com/dell/csm-hbnfs/nfs/mocks"
+	"github.com/dell/csm-hbnfs/nfs/proto"
 	"github.com/google/uuid"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc/codes"
@@ -32,17 +35,82 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
-func TestReassignVolume(t *testing.T) {
-	// Create a new fake clientset
-	clientset := fake.NewSimpleClientset()
+func TestNodeRecovery(t *testing.T) {
+	nodeIP := "127.0.0.1"
+	slice := &discoveryv1.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "mySlice",
+			Labels: map[string]string{
+				"pvName": "pv1",
+				"nodeID": "myNode",
+				"nodeIP": nodeIP,
+			},
 
-	// Test case: GetPersistentVolume fails
-	s := &CsiNfsService{
-		k8sclient: &k8s.K8sClient{
-			Clientset: clientset,
+			Annotations: map[string]string{
+				DriverVolumeID: "vol1",
+			},
+		},
+		Endpoints: []discoveryv1.Endpoint{
+			{
+				Addresses: []string{"1.2.3.4"},
+			},
 		},
 	}
 
+	tests := []struct {
+		name      string
+		configure func(t *testing.T) *CsiNfsService
+		wantErr   bool
+	}{
+		{
+			name: "Error: No slices found",
+			configure: func(t *testing.T) *CsiNfsService {
+				// Create a new fake clientset
+				clientset := fake.NewSimpleClientset()
+
+				s := &CsiNfsService{
+					k8sclient: &k8s.K8sClient{
+						Clientset: clientset,
+					},
+				}
+
+				return s
+			},
+		},
+		{
+			name: "Success: Found one endpointslice, unable to reassign",
+			configure: func(t *testing.T) *CsiNfsService {
+				// Create a new fake clientset
+				clientset := fake.NewSimpleClientset()
+
+				s := &CsiNfsService{
+					k8sclient: &k8s.K8sClient{
+						Clientset: clientset,
+					},
+				}
+
+				clientset.DiscoveryV1().EndpointSlices("").Create(context.Background(), slice, metav1.CreateOptions{})
+
+				server := mocks.NewMockNfsServer(gomock.NewController(t))
+				createMockServer(t, "127.0.0.2", server)
+				// Give it time for the server to setup
+				time.Sleep(50 * time.Millisecond)
+
+				return s
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := tt.configure(t)
+
+			s.nodeRecovery(nodeIP)
+		})
+	}
+}
+
+func TestReassignVolume(t *testing.T) {
 	slice := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "mySlice",
@@ -61,106 +129,373 @@ func TestReassignVolume(t *testing.T) {
 			},
 		},
 	}
+	volumeNodeID := "{\"csi-powerstore.dellemc.com\":\"csi-node-my-node-127.0.0.1\"}"
 
-	if s.reassignVolume(slice) {
-		t.Errorf("reassignVolume should return false when GetPersistentVolume fails")
-	}
+	tests := []struct {
+		name      string
+		configure func(t *testing.T) *CsiNfsService
+		wantErr   bool
+	}{
+		{
+			name: "Error: Unable to get Persisent Volume",
+			configure: func(t *testing.T) *CsiNfsService {
+				// Create a new fake clientset
+				clientset := fake.NewSimpleClientset()
 
-	// Test case: GetService fails
-	clientset.CoreV1().PersistentVolumes().Create(context.Background(), &v1.PersistentVolume{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "pv1",
-		},
-		Spec: v1.PersistentVolumeSpec{
-			PersistentVolumeSource: v1.PersistentVolumeSource{
-				CSI: &v1.CSIPersistentVolumeSource{
-					Driver:       "myDriver",
-					VolumeHandle: CsiNfsPrefixDash + uuid.New().String(),
-				},
+				// Test case: GetPersistentVolume fails
+				s := &CsiNfsService{
+					k8sclient: &k8s.K8sClient{
+						Clientset: clientset,
+					},
+				}
+
+				return s
 			},
+			wantErr: true,
 		},
-	}, metav1.CreateOptions{})
+		{
+			name: "Error: Unable to get Service",
+			configure: func(t *testing.T) *CsiNfsService {
+				// Create a new fake clientset
+				clientset := fake.NewSimpleClientset()
 
-	if s.reassignVolume(slice) {
-		t.Errorf("reassignVolume should return false when GetService fails")
-	}
+				// Test case: GetPersistentVolume fails
+				s := &CsiNfsService{
+					k8sclient: &k8s.K8sClient{
+						Clientset: clientset,
+					},
+				}
 
-	// Test case: callUnexportNfsVolume fails
-	clientset.CoreV1().Services("").Create(context.Background(), &v1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "mySlice",
-			Labels: map[string]string{
-				"client/myClient": "127.0.0.1",
+				clientset.CoreV1().PersistentVolumes().Create(context.Background(), &v1.PersistentVolume{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "pv1",
+					},
+					Spec: v1.PersistentVolumeSpec{
+						PersistentVolumeSource: v1.PersistentVolumeSource{
+							CSI: &v1.CSIPersistentVolumeSource{
+								Driver:       "myDriver",
+								VolumeHandle: CsiNfsPrefixDash + uuid.New().String(),
+							},
+						},
+					},
+				}, metav1.CreateOptions{})
+
+				return s
 			},
+			wantErr: true,
 		},
-	}, metav1.CreateOptions{})
+		{
+			name: "Error: Unable to execute ControllerUnpublishVolume",
+			configure: func(t *testing.T) *CsiNfsService {
+				// Create a new fake clientset
+				clientset := fake.NewSimpleClientset()
 
-	// Set the export counts for the client (will need mux)
-	exportCounts["127.0.0.1"] = 2
+				// Test case: GetPersistentVolume fails
+				s := &CsiNfsService{
+					k8sclient: &k8s.K8sClient{
+						Clientset: clientset,
+					},
+				}
 
-	service := mocks.NewMockService(gomock.NewController(t))
-	service.EXPECT().ControllerUnpublishVolume(gomock.Any(), gomock.Any()).Times(1).Return(nil, status.Errorf(codes.Internal, "unable to unpublish volume"))
-	s.vcsi = service
+				// Create Persistent Volume
+				clientset.CoreV1().PersistentVolumes().Create(context.Background(), &v1.PersistentVolume{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "pv1",
+					},
+					Spec: v1.PersistentVolumeSpec{
+						PersistentVolumeSource: v1.PersistentVolumeSource{
+							CSI: &v1.CSIPersistentVolumeSource{
+								Driver:       "myDriver",
+								VolumeHandle: CsiNfsPrefixDash + uuid.New().String(),
+							},
+						},
+					},
+				}, metav1.CreateOptions{})
 
-	if s.reassignVolume(slice) {
-		t.Errorf("reassignVolume should return false when callUnexportNfsVolume fails")
+				clientset.CoreV1().Services("").Create(context.Background(), &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "mySlice",
+						Labels: map[string]string{
+							"client/myClient": "127.0.0.1",
+						},
+					},
+				}, metav1.CreateOptions{})
+
+				// Set the export counts for the client (will need mux)
+				exportCounts["127.0.0.1"] = 2
+
+				service := mocks.NewMockService(gomock.NewController(t))
+				service.EXPECT().ControllerUnpublishVolume(gomock.Any(), gomock.Any()).Times(1).Return(nil, status.Errorf(codes.Internal, "unable to unpublish volume"))
+				s.vcsi = service
+
+				return s
+			},
+			wantErr: true,
+		},
+
+		{
+			name: "Error: Unable to GetNode",
+			configure: func(t *testing.T) *CsiNfsService {
+				// Create a new fake clientset
+				clientset := fake.NewSimpleClientset()
+
+				// Test case: GetPersistentVolume fails
+				s := &CsiNfsService{
+					k8sclient: &k8s.K8sClient{
+						Clientset: clientset,
+					},
+				}
+
+				// Create Persistent Volume
+				clientset.CoreV1().PersistentVolumes().Create(context.Background(), &v1.PersistentVolume{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "pv1",
+					},
+					Spec: v1.PersistentVolumeSpec{
+						PersistentVolumeSource: v1.PersistentVolumeSource{
+							CSI: &v1.CSIPersistentVolumeSource{
+								Driver:       "myDriver",
+								VolumeHandle: CsiNfsPrefixDash + uuid.New().String(),
+							},
+						},
+					},
+				}, metav1.CreateOptions{})
+
+				clientset.CoreV1().Services("").Create(context.Background(), &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "mySlice",
+						Labels: map[string]string{
+							"client/myClient": "127.0.0.1",
+						},
+					},
+				}, metav1.CreateOptions{})
+
+				// Set the export counts for the client (will need mux)
+				exportCounts["127.0.0.1"] = 2
+
+				service := mocks.NewMockService(gomock.NewController(t))
+				service.EXPECT().ControllerUnpublishVolume(gomock.Any(), gomock.Any()).Times(1).Return(&csi.ControllerUnpublishVolumeResponse{}, nil)
+				s.vcsi = service
+
+				return s
+			},
+			wantErr: true,
+		},
+		{
+			name: "Error: Unable to execute ControllerPublishVolume",
+			configure: func(t *testing.T) *CsiNfsService {
+				// Create a new fake clientset
+				clientset := fake.NewSimpleClientset()
+
+				// Test case: GetPersistentVolume fails
+				s := &CsiNfsService{
+					k8sclient: &k8s.K8sClient{
+						Clientset: clientset,
+					},
+				}
+
+				// Create Persistent Volume
+				clientset.CoreV1().PersistentVolumes().Create(context.Background(), &v1.PersistentVolume{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "pv1",
+					},
+					Spec: v1.PersistentVolumeSpec{
+						PersistentVolumeSource: v1.PersistentVolumeSource{
+							CSI: &v1.CSIPersistentVolumeSource{
+								Driver:       "myDriver",
+								VolumeHandle: CsiNfsPrefixDash + uuid.New().String(),
+							},
+						},
+					},
+				}, metav1.CreateOptions{})
+
+				clientset.CoreV1().Services("").Create(context.Background(), &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "mySlice",
+						Labels: map[string]string{
+							"client/myClient": "127.0.0.1",
+						},
+					},
+				}, metav1.CreateOptions{})
+
+				clientset.CoreV1().Nodes().Create(context.Background(), &v1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "127.0.0.1",
+						Annotations: map[string]string{
+							"csi.volume.kubernetes.io/nodeid": volumeNodeID,
+						},
+					},
+					Status: v1.NodeStatus{
+						Addresses: []v1.NodeAddress{
+							{
+								Address: "127.0.0.1",
+							},
+						},
+					},
+				}, metav1.CreateOptions{})
+
+				// Set the export counts for the client (will need mux)
+				exportCounts["127.0.0.1"] = 2
+
+				service := mocks.NewMockService(gomock.NewController(t))
+				service.EXPECT().ControllerUnpublishVolume(gomock.Any(), gomock.Any()).Times(1).Return(&csi.ControllerUnpublishVolumeResponse{}, nil)
+				service.EXPECT().ControllerPublishVolume(gomock.Any(), gomock.Any()).Times(1).Return(nil, status.Errorf(codes.Internal, "unable to publish volume"))
+				s.vcsi = service
+
+				return s
+			},
+			wantErr: true,
+		},
+		{
+			name: "Error: Unable to callExportNfsVolume",
+			configure: func(t *testing.T) *CsiNfsService {
+				// Create a new fake clientset
+				clientset := fake.NewSimpleClientset()
+
+				// Test case: GetPersistentVolume fails
+				s := &CsiNfsService{
+					k8sclient: &k8s.K8sClient{
+						Clientset: clientset,
+					},
+				}
+
+				// Create Persistent Volume
+				clientset.CoreV1().PersistentVolumes().Create(context.Background(), &v1.PersistentVolume{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "pv1",
+					},
+					Spec: v1.PersistentVolumeSpec{
+						PersistentVolumeSource: v1.PersistentVolumeSource{
+							CSI: &v1.CSIPersistentVolumeSource{
+								Driver:       "myDriver",
+								VolumeHandle: CsiNfsPrefixDash + uuid.New().String(),
+							},
+						},
+					},
+				}, metav1.CreateOptions{})
+
+				clientset.CoreV1().Services("").Create(context.Background(), &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "mySlice",
+						Labels: map[string]string{
+							"client/myClient": "127.0.0.1",
+						},
+					},
+				}, metav1.CreateOptions{})
+
+				clientset.CoreV1().Nodes().Create(context.Background(), &v1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "127.0.0.1",
+						Annotations: map[string]string{
+							"csi.volume.kubernetes.io/nodeid": volumeNodeID,
+						},
+					},
+					Status: v1.NodeStatus{
+						Addresses: []v1.NodeAddress{
+							{
+								Address: "127.0.0.1",
+							},
+						},
+					},
+				}, metav1.CreateOptions{})
+
+				// Set the export counts for the client (will need mux)
+				exportCounts["127.0.0.1"] = 2
+
+				service := mocks.NewMockService(gomock.NewController(t))
+				service.EXPECT().ControllerUnpublishVolume(gomock.Any(), gomock.Any()).Times(1).Return(&csi.ControllerUnpublishVolumeResponse{}, nil)
+				service.EXPECT().ControllerPublishVolume(gomock.Any(), gomock.Any()).Times(1).Return(&csi.ControllerPublishVolumeResponse{}, nil)
+				s.vcsi = service
+
+				return s
+			},
+			wantErr: true,
+		},
+		{
+			name: "Success: Reassign volume with proper export",
+			configure: func(t *testing.T) *CsiNfsService {
+				// Create a new fake clientset
+				clientset := fake.NewSimpleClientset()
+
+				// Test case: GetPersistentVolume fails
+				s := &CsiNfsService{
+					k8sclient: &k8s.K8sClient{
+						Clientset: clientset,
+					},
+				}
+
+				// Create Persistent Volume
+				clientset.CoreV1().PersistentVolumes().Create(context.Background(), &v1.PersistentVolume{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "pv1",
+					},
+					Spec: v1.PersistentVolumeSpec{
+						PersistentVolumeSource: v1.PersistentVolumeSource{
+							CSI: &v1.CSIPersistentVolumeSource{
+								Driver:       "myDriver",
+								VolumeHandle: CsiNfsPrefixDash + uuid.New().String(),
+							},
+						},
+					},
+				}, metav1.CreateOptions{})
+
+				clientset.CoreV1().Services("").Create(context.Background(), &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "mySlice",
+						Labels: map[string]string{
+							"client/myClient": "127.0.0.1",
+						},
+					},
+				}, metav1.CreateOptions{})
+
+				clientset.CoreV1().Nodes().Create(context.Background(), &v1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "127.0.0.1",
+						Annotations: map[string]string{
+							"csi.volume.kubernetes.io/nodeid": volumeNodeID,
+						},
+					},
+					Status: v1.NodeStatus{
+						Addresses: []v1.NodeAddress{
+							{
+								Address: "127.0.0.1",
+							},
+						},
+					},
+				}, metav1.CreateOptions{})
+
+				clientset.DiscoveryV1().EndpointSlices("").Create(context.Background(), slice, metav1.CreateOptions{})
+
+				// Set the export counts for the client (will need mux)
+				exportCounts["127.0.0.1"] = 2
+
+				service := mocks.NewMockService(gomock.NewController(t))
+				service.EXPECT().ControllerUnpublishVolume(gomock.Any(), gomock.Any()).Times(1).Return(&csi.ControllerUnpublishVolumeResponse{}, nil)
+				service.EXPECT().ControllerPublishVolume(gomock.Any(), gomock.Any()).Times(1).Return(&csi.ControllerPublishVolumeResponse{}, nil)
+				s.vcsi = service
+
+				server := mocks.NewMockNfsServer(gomock.NewController(t))
+				server.EXPECT().ExportNfsVolume(gomock.Any(), gomock.Any()).Times(1).Return(&proto.ExportNfsVolumeResponse{VolumeId: uuid.New().String()}, nil)
+
+				createMockServer(t, "127.0.0.1", server)
+				// Give it time for the server to setup
+				time.Sleep(50 * time.Millisecond)
+
+				return s
+			},
+			wantErr: false,
+		},
 	}
 
-	// // Test case: ControllerUnpublishVolume fails
-	// s = &CsiNfsService{
-	// 	k8sclient: &MockK8sClient{
-	// 		GetNodeErr: fmt.Errorf("failed to get Node"),
-	// 	},
-	// 	vcsi: &MockVCSI{
-	// 		ControllerUnpublishVolumeErr: fmt.Errorf("failed to unpublish volume"),
-	// 	},
-	// }
-	// if s.reassignVolume(slice) {
-	// 	t.Errorf("reassignVolume should return false when ControllerUnpublishVolume fails")
-	// }
-	// // Test case: GetNode fails
-	// s = &CsiNfsService{
-	// 	k8sclient: &MockK8sClient{
-	// 		GetNodeErr: fmt.Errorf("failed to get Node"),
-	// 	},
-	// }
-	// if s.reassignVolume(slice) {
-	// 	t.Errorf("reassignVolume should return false when GetNode fails")
-	// }
-	// // Test case: ControllerPublishVolume fails
-	// s = &CsiNfsService{
-	// 	k8sclient: &MockK8sClient{
-	// 		GetNodeErr: fmt.Errorf("failed to get Node"),
-	// 	},
-	// 	vcsi: &MockVCSI{
-	// 		ControllerPublishVolumeErr: fmt.Errorf("failed to publish volume"),
-	// 	},
-	// }
-	// if s.reassignVolume(slice) {
-	// 	t.Errorf("reassignVolume should return false when ControllerPublishVolume fails")
-	// }
-	// // Test case: callExportNfsVolume fails
-	// s = &CsiNfsService{
-	// 	k8sclient: &MockK8sClient{
-	// 		GetNodeErr: fmt.Errorf("failed to get Node"),
-	// 	},
-	// 	vcsi: &MockVCSI{
-	// 		ControllerPublishVolumeErr: fmt.Errorf("failed to publish volume"),
-	// 	},
-	// }
-	// if s.reassignVolume(slice) {
-	// 	t.Errorf("reassignVolume should return false when callExportNfsVolume fails")
-	// }
-	// // Test case: UpdateEndpointSlice fails
-	// s = &CsiNfsService{
-	// 	k8sclient: &MockK8sClient{
-	// 		GetNodeErr: fmt.Errorf("failed to get Node"),
-	// 	},
-	// 	vcsi: &MockVCSI{
-	// 		ControllerPublishVolumeErr: fmt.Errorf("failed to publish volume"),
-	// 	},
-	// }
-	// if s.reassignVolume(slice) {
-	// 	t.Errorf("reassignVolume should return false when UpdateEndpointSlice fails")
-	// }
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := tt.configure(t)
+
+			res := s.reassignVolume(slice)
+
+			if tt.wantErr && res {
+				t.Error("expecting error but reassign is successful")
+			}
+		})
+	}
 }

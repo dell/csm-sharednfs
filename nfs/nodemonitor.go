@@ -166,7 +166,7 @@ func (s *CsiNfsService) pinger(node *v1.Node) {
 
 // getNodeExportCounts will return a map of Node Name to number of nfs volumes that are exported
 // if the nodes are online.
-func (s *CsiNfsService) getNodeExportCounts(_ context.Context) (map[string]int, error) {
+func (s *CsiNfsService) getNodeExportCounts(_ context.Context) map[string]int {
 	numberNodes := len(nodeIpToStatus)
 	done := make(chan bool, numberNodes)
 	exportsMap := make(map[string]int, 0)
@@ -191,7 +191,7 @@ func (s *CsiNfsService) getNodeExportCounts(_ context.Context) (map[string]int, 
 		<-done
 	}
 
-	return exportsMap, nil
+	return exportsMap
 }
 
 func isControlPlaneNode(node *v1.Node) bool {
