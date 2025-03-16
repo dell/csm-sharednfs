@@ -125,6 +125,7 @@ func TestCheckExport(t *testing.T) {
 					bufioMutex.Lock()
 					defer bufioMutex.Unlock()
 					scanner := bufio.NewScanner(file)
+					// close the file before returning to induce scanner error
 					file.Close()
 					return scanner
 				}
@@ -252,6 +253,7 @@ func TestGetExport(t *testing.T) {
 					bufioMutex.Lock()
 					defer bufioMutex.Unlock()
 					scanner := bufio.NewScanner(file)
+					// close the file before returning to induce scanner error
 					file.Close()
 					return scanner
 				}
@@ -282,7 +284,7 @@ func TestGetExport(t *testing.T) {
 
 			// Check the result and error
 			if (err != nil) != tt.wantErr {
-				t.Errorf("checkExport() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("GetExport() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			got := result != ""
@@ -291,7 +293,7 @@ func TestGetExport(t *testing.T) {
 	}
 }
 
-func TestGetExports(t *testing.T) {
+func TestGetNFSExports(t *testing.T) {
 	defaultGetBufioScanner := GetBufioScanner
 	tests := []struct {
 		name      string
@@ -384,6 +386,7 @@ func TestGetExports(t *testing.T) {
 					bufioMutex.Lock()
 					defer bufioMutex.Unlock()
 					scanner := bufio.NewScanner(file)
+					// close the file before returning to induce scanner error
 					file.Close()
 					return scanner
 				}
@@ -414,7 +417,7 @@ func TestGetExports(t *testing.T) {
 
 			// Check the result and error
 			if (err != nil) != tt.wantErr {
-				t.Errorf("checkExport() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("GetExports() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			got := len(result) > 0
@@ -516,7 +519,7 @@ func TestAddExport(t *testing.T) {
 
 			// Check the result and error
 			if (err != nil) != tt.wantErr {
-				t.Errorf("checkExport() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("AddExport() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			got := result > 0
@@ -705,7 +708,7 @@ func TestDeleteExport(t *testing.T) {
 
 			// Check the result and error
 			if (err != nil) != tt.wantErr {
-				t.Errorf("checkExport() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("DeleteExport() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			got := result > 0
