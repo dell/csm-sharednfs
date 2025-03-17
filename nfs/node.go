@@ -29,17 +29,15 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var (
-	nodePublishTimeout = 10 * time.Second
-)
+var nodePublishTimeout = 10 * time.Second
 
-func (ns *CsiNfsService) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
+func (ns *CsiNfsService) NodeStageVolume(_ context.Context, _ *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 	// Implement your logic here
 	// Add an nfs mount of the volume to the staging directory
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
-func (ns *CsiNfsService) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
+func (ns *CsiNfsService) NodeUnstageVolume(_ context.Context, _ *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
 	// Implement your logic here
 	// Ensure there are no remaining mounts using the staging directory.
 	// Remove the NFS mount from the staging directory.
@@ -81,9 +79,9 @@ func (ns *CsiNfsService) nodePublishVolume(ctx context.Context, req *csi.NodePub
 	// First, locate the service
 	// TODO are we using the vxflexos namespace?
 	namespace := DriverNamespace
-	service, service_err := ns.k8sclient.GetService(ctx, namespace, serviceName)
-	if service_err != nil {
-		return resp, fmt.Errorf("service_err %s/%s not found: %+v", namespace, serviceName, service)
+	service, err := ns.k8sclient.GetService(ctx, namespace, serviceName)
+	if err != nil {
+		return resp, fmt.Errorf("err %s/%s not found: %+v", namespace, serviceName, service)
 	}
 	if service.Spec.ClusterIP == "" {
 		return resp, fmt.Errorf("NodePublishVolume %s failed, service IP empty", req.VolumeId)
@@ -129,7 +127,7 @@ func (ns *CsiNfsService) nodePublishVolume(ctx context.Context, req *csi.NodePub
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
-func (ns *CsiNfsService) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
+func (ns *CsiNfsService) NodeUnpublishVolume(_ context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 	start := time.Now()
 	target := req.TargetPath
 	// Get lock for concurrency
@@ -167,31 +165,31 @@ func (ns *CsiNfsService) NodeUnpublishVolume(ctx context.Context, req *csi.NodeU
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
-func (ns *CsiNfsService) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
+func (ns *CsiNfsService) NodeGetVolumeStats(_ context.Context, _ *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
 	// Implement your logic here
 	return &csi.NodeGetVolumeStatsResponse{}, nil
 }
 
-func (ns *CsiNfsService) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
+func (ns *CsiNfsService) NodeExpandVolume(_ context.Context, _ *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
 	// Implement your logic here
 	return &csi.NodeExpandVolumeResponse{}, nil
 }
 
-func (ns *CsiNfsService) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
+func (ns *CsiNfsService) NodeGetCapabilities(_ context.Context, _ *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
 	// Implement your logic here
 	return &csi.NodeGetCapabilitiesResponse{}, nil
 }
 
-func (ns *CsiNfsService) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
+func (ns *CsiNfsService) NodeGetInfo(_ context.Context, _ *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
 	// Implement your logic here
 	return &csi.NodeGetInfoResponse{}, nil
 }
 
-func (ns *CsiNfsService) MountVolume(ctx context.Context, volumeId string, fsType string, nfsExportDir string, _ map[string]string) (string, error) {
+func (ns *CsiNfsService) MountVolume(_ context.Context, _ string, _ string, _ string, _ map[string]string) (string, error) {
 	// Implement your logic here
 	return "", nil
 }
 
-func (ns *CsiNfsService) UnmountVolume(ctx context.Context, volumeId string, exportDirectory string, nfsConext map[string]string) error {
+func (ns *CsiNfsService) UnmountVolume(_ context.Context, _ string, _ string, _ map[string]string) error {
 	return fmt.Errorf("nfs UnmountVolume not implemented")
 }

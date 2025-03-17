@@ -158,8 +158,8 @@ func TestNFSToArrayVolumeID(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := NFSToArrayVolumeID(tt.args.id); got != tt.want {
-				t.Errorf("NFSToArrayVolumeID() = %v, want %v", got, tt.want)
+			if got := ToArrayVolumeID(tt.args.id); got != tt.want {
+				t.Errorf("ToArrayVolumeID() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -246,7 +246,7 @@ func TestArrayToNFSVolumeID(t *testing.T) {
 }
 
 func TestNew(t *testing.T) {
-	var defaultSvc *CsiNfsService = nil
+	var defaultSvc *CsiNfsService
 	afterEach := func() {
 		nfsService = defaultSvc
 	}
@@ -283,7 +283,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestPutVcsiService(t *testing.T) {
-	var defaultNfsService *CsiNfsService = nil
+	var defaultNfsService *CsiNfsService
 	afterEach := func() {
 		nfsService = defaultNfsService
 	}
@@ -485,7 +485,7 @@ func Test_getRequestIdFromContext(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := getRequestIdFromContext(tt.args.ctx); got != tt.want {
+			if got := getRequestIDFromContext(tt.args.ctx); got != tt.want {
 				t.Errorf("getRequestIdFromContext() = %v, want %v", got, tt.want)
 			}
 		})
@@ -494,7 +494,7 @@ func Test_getRequestIdFromContext(t *testing.T) {
 
 func TestCsiNfsService_startNodeMonitors(t *testing.T) {
 	type fields struct {
-		k8sclient *k8s.K8sClient
+		k8sclient *k8s.Client
 	}
 	tests := []struct {
 		name    string
@@ -504,7 +504,7 @@ func TestCsiNfsService_startNodeMonitors(t *testing.T) {
 		{
 			name: "for controller node",
 			fields: fields{
-				k8sclient: func() *k8s.K8sClient {
+				k8sclient: func() *k8s.Client {
 					clientSet := fake.NewClientset()
 					_, err := clientSet.CoreV1().Nodes().Create(context.Background(), &v1.Node{
 						Spec: v1.NodeSpec{
@@ -518,7 +518,7 @@ func TestCsiNfsService_startNodeMonitors(t *testing.T) {
 					if err != nil {
 						t.Error("failed to add node via the fake client")
 					}
-					return &k8s.K8sClient{
+					return &k8s.Client{
 						Clientset: clientSet,
 					}
 				}(),
@@ -567,7 +567,7 @@ func TestCsiNfsService_BeforeServe(t *testing.T) {
 		nodeIPAddress   string
 		podCIDR         string
 		nodeName        string
-		k8sclient       *k8s.K8sClient
+		k8sclient       *k8s.Client
 		executor        Executor
 	}
 	type args struct {
@@ -657,7 +657,7 @@ func TestCsiNfsService_BeforeServe(t *testing.T) {
 				k8s.RestInClusterConfigFunc = func() (*rest.Config, error) {
 					return new(rest.Config), nil
 				}
-				k8s.NewForConfigFunc = func(config *rest.Config) (kubernetes.Interface, error) {
+				k8s.NewForConfigFunc = func(_ *rest.Config) (kubernetes.Interface, error) {
 					return clientSet, nil
 				}
 			},
@@ -709,7 +709,7 @@ func TestCsiNfsService_BeforeServe(t *testing.T) {
 				k8s.RestInClusterConfigFunc = func() (*rest.Config, error) {
 					return new(rest.Config), nil
 				}
-				k8s.NewForConfigFunc = func(config *rest.Config) (kubernetes.Interface, error) {
+				k8s.NewForConfigFunc = func(_ *rest.Config) (kubernetes.Interface, error) {
 					return clientSet, nil
 				}
 			},
@@ -767,7 +767,7 @@ func TestCsiNfsService_BeforeServe(t *testing.T) {
 				k8s.RestInClusterConfigFunc = func() (*rest.Config, error) {
 					return new(rest.Config), nil
 				}
-				k8s.NewForConfigFunc = func(config *rest.Config) (kubernetes.Interface, error) {
+				k8s.NewForConfigFunc = func(_ *rest.Config) (kubernetes.Interface, error) {
 					return clientSet, nil
 				}
 
@@ -833,7 +833,7 @@ func TestCsiNfsService_BeforeServe(t *testing.T) {
 				k8s.RestInClusterConfigFunc = func() (*rest.Config, error) {
 					return new(rest.Config), nil
 				}
-				k8s.NewForConfigFunc = func(config *rest.Config) (kubernetes.Interface, error) {
+				k8s.NewForConfigFunc = func(_ *rest.Config) (kubernetes.Interface, error) {
 					return clientSet, nil
 				}
 
@@ -899,7 +899,7 @@ func TestCsiNfsService_BeforeServe(t *testing.T) {
 				k8s.RestInClusterConfigFunc = func() (*rest.Config, error) {
 					return new(rest.Config), nil
 				}
-				k8s.NewForConfigFunc = func(config *rest.Config) (kubernetes.Interface, error) {
+				k8s.NewForConfigFunc = func(_ *rest.Config) (kubernetes.Interface, error) {
 					return clientSet, nil
 				}
 
@@ -1008,7 +1008,7 @@ func TestCsiNfsService_RegisterAdditionalServers(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(_ *testing.T) {
 			s := &CsiNfsService{}
 			s.RegisterAdditionalServers(tt.args.server)
 		})

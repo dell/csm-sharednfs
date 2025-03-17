@@ -22,14 +22,14 @@ import (
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 )
 
-func (ids *CsiNfsService) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
+func (ids *CsiNfsService) GetPluginInfo(_ context.Context, _ *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
 	return &csi.GetPluginInfoResponse{
 		Name:          "your-plugin-name",
 		VendorVersion: "0.1.0",
 	}, nil
 }
 
-func (ids *CsiNfsService) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
+func (ids *CsiNfsService) GetPluginCapabilities(_ context.Context, _ *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
 	return &csi.GetPluginCapabilitiesResponse{
 		Capabilities: []*csi.PluginCapability{
 			{
@@ -43,6 +43,6 @@ func (ids *CsiNfsService) GetPluginCapabilities(ctx context.Context, req *csi.Ge
 	}, nil
 }
 
-func (ids *CsiNfsService) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
+func (ids *CsiNfsService) Probe(_ context.Context, _ *csi.ProbeRequest) (*csi.ProbeResponse, error) {
 	return &csi.ProbeResponse{}, nil
 }

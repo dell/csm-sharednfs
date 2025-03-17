@@ -57,7 +57,7 @@ type CsiNfsService struct {
 	nodeName        string
 	failureRetries  int
 
-	k8sclient *k8s.K8sClient
+	k8sclient *k8s.Client
 	executor  Executor
 }
 
@@ -104,7 +104,7 @@ var (
 	IsNFSSnapshotID = hasNFSPrefix
 )
 
-func NFSToArrayVolumeID(id string) string {
+func ToArrayVolumeID(id string) string {
 	return strings.TrimPrefix(id, CsiNfsPrefixDash)
 }
 
@@ -145,7 +145,7 @@ func VolumeIDToServiceName(id string) string {
 	}
 
 	// if it fails the check, replace any illegal chars with '-'
-	cleaned := illegalCharRegex.ReplaceAllStringFunc(id, func(match string) string {
+	cleaned := illegalCharRegex.ReplaceAllStringFunc(id, func(_ string) string {
 		// replace all characters that are not alpha chars with '-'
 		return "-"
 	})
@@ -178,11 +178,11 @@ func (s *CsiNfsService) ProcessMapSecretChange() error {
 }
 
 // RegisterAdditionalServers is not implemented.
-func (s *CsiNfsService) RegisterAdditionalServers(server *grpc.Server) {
+func (s *CsiNfsService) RegisterAdditionalServers(_ *grpc.Server) {
 }
 
 // VolumeIDToArrayID is not implemented.
-func (s *CsiNfsService) VolumeIDToArrayID(volID string) string {
+func (s *CsiNfsService) VolumeIDToArrayID(_ string) string {
 	return ""
 }
 
@@ -312,8 +312,8 @@ func (s *CsiNfsService) startNodeMonitors() error {
 	return nil
 }
 
-// getRequestIdFromContext returns the csi.requestid if available in the context
-func getRequestIdFromContext(ctx context.Context) string {
+// getRequestIDFromContext returns the csi.requestid if available in the context
+func getRequestIDFromContext(ctx context.Context) string {
 	headers, ok := metadata.FromIncomingContext(ctx)
 	if ok {
 		if req, ok := headers["csi.requestid"]; ok && len(req) > 0 {

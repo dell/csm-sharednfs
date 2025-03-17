@@ -29,7 +29,7 @@ import (
 
 type NodeStatus struct {
 	nodeName       string
-	nodeIp         string
+	nodeIP         string
 	badPings       int
 	goodPings      int
 	inRecovery     bool
@@ -38,9 +38,7 @@ type NodeStatus struct {
 	dumpingExports bool
 }
 
-var (
-	GetExportsTimeout = 5 * time.Second
-)
+var GetExportsTimeout = 5 * time.Second
 
 var Pinger = struct {
 	rate       time.Duration
@@ -54,11 +52,11 @@ var Pinger = struct {
 	monitorMux: &sync.Mutex{},
 }
 
-// nodeIpToStatus has a map of nodeIp to it's status
-var nodeIpToStatus map[string]*NodeStatus
+// nodeIPAddress has a map of nodeIp to it's status
+var nodeIPAddress map[string]*NodeStatus
 
 func init() {
-	nodeIpToStatus = make(map[string]*NodeStatus)
+	nodeIPAddress = make(map[string]*NodeStatus)
 }
 
 func setPingRate(rate time.Duration) {
@@ -71,7 +69,6 @@ func getPingRate() time.Duration {
 	Pinger.monitorMux.Lock()
 	defer Pinger.monitorMux.Unlock()
 	return Pinger.rate
-
 }
 
 func (s CsiNfsService) startNodeMonitor(node *v1.Node) {
@@ -83,8 +80,8 @@ func (s CsiNfsService) startNodeMonitor(node *v1.Node) {
 }
 
 // GetNodeStatus returns the node status retrieved by the node IP address.
-func (s *CsiNfsService) GetNodeStatus(nodeIpAddress string) *NodeStatus {
-	return nodeIpToStatus[nodeIpAddress]
+func (s *CsiNfsService) GetNodeStatus(address string) *NodeStatus {
+	return nodeIPAddress[address]
 }
 
 func (s *CsiNfsService) ping(pingRequest *proto.PingRequest) (*proto.PingResponse, error) {
@@ -98,10 +95,10 @@ func (s *CsiNfsService) ping(pingRequest *proto.PingRequest) (*proto.PingRespons
 	return resp, err
 }
 
-func (s *CsiNfsService) getExports(nodeIp string) ([]string, error) {
+func (s *CsiNfsService) getExports(nodeIP string) ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), GetExportsTimeout)
 	defer cancel()
-	nodeClient, err := getNfsClient(nodeIp, getServerPort())
+	nodeClient, err := getNfsClient(nodeIP, getServerPort())
 	if err != nil {
 		return make([]string, 0), err
 	}
@@ -120,16 +117,16 @@ func (s *CsiNfsService) pinger(node *v1.Node) {
 	}
 	status := &NodeStatus{
 		nodeName: node.Name,
-		nodeIp:   node.Status.Addresses[0].Address,
+		nodeIP:   node.Status.Addresses[0].Address,
 		online:   true,
 		status:   "",
 	}
-	nodeIpToStatus[status.nodeIp] = status
+	nodeIPAddress[status.nodeIP] = status
 
 	// This endless loop pings the node to determine status
 	for {
 		pingRequest := &proto.PingRequest{
-			NodeIpAddress:  status.nodeIp,
+			NodeIpAddress:  status.nodeIP,
 			DumpAllExports: status.dumpingExports,
 		}
 		resp, err := s.ping(pingRequest)
@@ -141,11 +138,11 @@ func (s *CsiNfsService) pinger(node *v1.Node) {
 			status.badPings++
 			status.goodPings = 0
 			if !status.inRecovery && status.badPings >= Pinger.maxBadPing {
-				log.Infof("pinger: initiating node recover actions node %s", status.nodeIp)
+				log.Infof("pinger: initiating node recover actions node %s", status.nodeIP)
 				status.inRecovery = true
 				status.dumpingExports = true
 				// cal nodeRecovery to initiate the recovery process
-				go s.nodeRecovery(status.nodeIp)
+				go s.nodeRecovery(status.nodeIP)
 			}
 		} else {
 			if !status.online {
@@ -167,19 +164,19 @@ func (s *CsiNfsService) pinger(node *v1.Node) {
 // getNodeExportCounts will return a map of Node Name to number of nfs volumes that are exported
 // if the nodes are online.
 func (s *CsiNfsService) getNodeExportCounts(_ context.Context) map[string]int {
-	numberNodes := len(nodeIpToStatus)
+	numberNodes := len(nodeIPAddress)
 	done := make(chan bool, numberNodes)
 	exportsMap := make(map[string]int, 0)
 	var nnodes int
 
 	log.Infof("initiating getExports")
-	for _, status := range nodeIpToStatus {
+	for _, status := range nodeIPAddress {
 		go func() {
-			exports, err := s.getExports(status.nodeIp)
+			exports, err := s.getExports(status.nodeIP)
 			if err == nil && !status.inRecovery {
 				exportsMap[status.nodeName] = len(exports)
 			} else {
-				log.Infof("node %s needs recovery", status.nodeIp)
+				log.Infof("node %s needs recovery", status.nodeIP)
 			}
 			done <- true
 		}()

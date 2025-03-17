@@ -65,17 +65,17 @@ func TestNodeRecovery(t *testing.T) {
 	}{
 		{
 			name: "Error: No slices found",
-			configure: func(t *testing.T) *CsiNfsService {
+			configure: func(_ *testing.T) *CsiNfsService {
 				// Create a new fake clientset
 				clientset := fake.NewSimpleClientset()
 
 				s := &CsiNfsService{
-					k8sclient: &k8s.K8sClient{
+					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
 				}
 
-				nodeIpToStatus = make(map[string]*NodeStatus)
+				nodeIPAddress = make(map[string]*NodeStatus)
 
 				return s
 			},
@@ -87,7 +87,7 @@ func TestNodeRecovery(t *testing.T) {
 				clientset := fake.NewSimpleClientset()
 
 				s := &CsiNfsService{
-					k8sclient: &k8s.K8sClient{
+					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
 				}
@@ -99,7 +99,7 @@ func TestNodeRecovery(t *testing.T) {
 				// Give it time for the server to setup
 				time.Sleep(50 * time.Millisecond)
 
-				nodeIpToStatus = make(map[string]*NodeStatus)
+				nodeIPAddress = make(map[string]*NodeStatus)
 
 				return s
 			},
@@ -143,13 +143,13 @@ func TestReassignVolume(t *testing.T) {
 	}{
 		{
 			name: "Error: Unable to get Persisent Volume",
-			configure: func(t *testing.T) *CsiNfsService {
+			configure: func(_ *testing.T) *CsiNfsService {
 				// Create a new fake clientset
 				clientset := fake.NewSimpleClientset()
 
 				// Test case: GetPersistentVolume fails
 				s := &CsiNfsService{
-					k8sclient: &k8s.K8sClient{
+					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
 				}
@@ -160,13 +160,13 @@ func TestReassignVolume(t *testing.T) {
 		},
 		{
 			name: "Error: Unable to get Service",
-			configure: func(t *testing.T) *CsiNfsService {
+			configure: func(_ *testing.T) *CsiNfsService {
 				// Create a new fake clientset
 				clientset := fake.NewSimpleClientset()
 
 				// Test case: GetPersistentVolume fails
 				s := &CsiNfsService{
-					k8sclient: &k8s.K8sClient{
+					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
 				}
@@ -197,7 +197,7 @@ func TestReassignVolume(t *testing.T) {
 
 				// Test case: GetPersistentVolume fails
 				s := &CsiNfsService{
-					k8sclient: &k8s.K8sClient{
+					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
 				}
@@ -246,7 +246,7 @@ func TestReassignVolume(t *testing.T) {
 
 				// Test case: GetPersistentVolume fails
 				s := &CsiNfsService{
-					k8sclient: &k8s.K8sClient{
+					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
 				}
@@ -294,7 +294,7 @@ func TestReassignVolume(t *testing.T) {
 
 				// Test case: GetPersistentVolume fails
 				s := &CsiNfsService{
-					k8sclient: &k8s.K8sClient{
+					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
 				}
@@ -359,7 +359,7 @@ func TestReassignVolume(t *testing.T) {
 
 				// Test case: GetPersistentVolume fails
 				s := &CsiNfsService{
-					k8sclient: &k8s.K8sClient{
+					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
 				}
@@ -424,7 +424,7 @@ func TestReassignVolume(t *testing.T) {
 
 				// Test case: GetPersistentVolume fails
 				s := &CsiNfsService{
-					k8sclient: &k8s.K8sClient{
+					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
 				}
@@ -532,12 +532,12 @@ func TestUpdateEndpointSlice(t *testing.T) {
 	}{
 		{
 			name: "Success: Reassign volume with proper export",
-			configure: func(t *testing.T) *CsiNfsService {
+			configure: func(_ *testing.T) *CsiNfsService {
 				// Create a new fake clientset
 				clientset := fake.NewSimpleClientset()
 
 				s := &CsiNfsService{
-					k8sclient: &k8s.K8sClient{
+					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
 				}
@@ -550,12 +550,12 @@ func TestUpdateEndpointSlice(t *testing.T) {
 		},
 		{
 			name: "Fail: Unable to update endpoint slice",
-			configure: func(t *testing.T) *CsiNfsService {
+			configure: func(_ *testing.T) *CsiNfsService {
 				// Create a new fake clientset
 				clientset := fake.NewSimpleClientset()
 
 				s := &CsiNfsService{
-					k8sclient: &k8s.K8sClient{
+					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
 				}

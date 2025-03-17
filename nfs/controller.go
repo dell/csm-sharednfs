@@ -67,7 +67,7 @@ func (cs *CsiNfsService) CreateVolume(ctx context.Context, req *csi.CreateVolume
 	return resp, err
 }
 
-func (cs *CsiNfsService) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
+func (cs *CsiNfsService) DeleteVolume(_ context.Context, _ *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
 	// Implement your logic here
 	return &csi.DeleteVolumeResponse{}, nil
 }
@@ -122,9 +122,9 @@ func (cs *CsiNfsService) ControllerPublishVolume(ctx context.Context,
 	req *csi.ControllerPublishVolumeRequest,
 ) (*csi.ControllerPublishVolumeResponse, error) {
 	resp := &csi.ControllerPublishVolumeResponse{}
-	requestId := getRequestIdFromContext(ctx)
+	requestID := getRequestIDFromContext(ctx)
 	start := time.Now()
-	defer finish("ControllerPublishVolume", requestId, start, ctx)
+	defer finish(ctx, "ControllerPublishVolume", requestID, start)
 	// Implement your logic here
 	// validate the incoming Parameters have the nfsrwx designation and the PV name of the volume.
 	// optain a lock (in the controller) for ths volume
@@ -138,7 +138,7 @@ func (cs *CsiNfsService) ControllerPublishVolume(ctx context.Context,
 	log.Infof("Entered nfs ControllerPublishVolume %s %s %+v", name, req.VolumeId, req)
 
 	// Get lock for concurrency
-	cs.LockPV(req.VolumeId, requestId)
+	cs.LockPV(req.VolumeId, requestID)
 	defer cs.UnlockPV(req.VolumeId)
 
 	// Read the PV. This is necessary from which to determine the namespace.
@@ -158,18 +158,18 @@ func (cs *CsiNfsService) ControllerPublishVolume(ctx context.Context,
 	log.Infof("serviceName %s nfs namespace %s", serviceName, namespace)
 
 	// TODO make the key value generic across different driver types
-	node, err := cs.k8sclient.GetNodeByCSINodeId(ctx, DriverName, req.NodeId)
+	node, err := cs.k8sclient.GetNodeByCSINodeID(ctx, DriverName, req.NodeId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "could not retrieve Node %s: %s", req.NodeId, err)
 	}
-	nodeIpAddress := ""
+	nodeIPAddress := ""
 	// For now, use the first Node Address (is this always right)?
 	if len(node.Status.Addresses) > 0 {
-		nodeIpAddress = node.Status.Addresses[0].Address
+		nodeIPAddress = node.Status.Addresses[0].Address
 	} else {
 		return nil, status.Errorf(codes.Internal, "could not determine address of Node %s", req.NodeId)
 	}
-	log.Infof("nfs nodeIpAddress %s", nodeIpAddress)
+	log.Infof("nfs nodeIPAddress %s", nodeIPAddress)
 
 	// Look to see if there is an existing endpoint slice, and then associated service.
 	service, endpoint, err := cs.getServiceAndSlice(ctx, serviceName)
@@ -182,14 +182,14 @@ func (cs *CsiNfsService) ControllerPublishVolume(ctx context.Context,
 
 	if endpoint == nil && service == nil {
 		// Check the Node Status before proceeding. Otherwise we need to choose another node.
-		nodeStatus := cs.GetNodeStatus(nodeIpAddress)
+		nodeStatus := cs.GetNodeStatus(nodeIPAddress)
 		if nodeStatus == nil || !nodeStatus.online || nodeStatus.inRecovery {
-			return nil, status.Errorf(codes.ResourceExhausted, "Node  %s (%s) is not online or is in node recovery", req.NodeId, nodeIpAddress)
+			return nil, status.Errorf(codes.ResourceExhausted, "Node  %s (%s) is not online or is in node recovery", req.NodeId, nodeIPAddress)
 		}
 		// Here we have the condition no service has been established.
 		log.Infof("Call makeNfsService with volume id: %s", req.VolumeId)
 		// Passing originalID because the vcsi call is made inside the makeNfsService call.
-		service, err := cs.makeNfsService(ctx, namespace, serviceName, name, nodeIpAddress, req)
+		service, err := cs.makeNfsService(ctx, namespace, serviceName, name, nodeIPAddress, req)
 		log.Infof("makeNfsService response %+v error %s", service, err)
 		return resp, err
 	}
@@ -210,15 +210,15 @@ func (cs *CsiNfsService) ControllerPublishVolume(ctx context.Context,
 func (cs *CsiNfsService) getServiceAndSlice(ctx context.Context, serviceName string) (*corev1.Service, *discoveryv1.EndpointSlice, error) {
 	namespace := DriverNamespace
 	// Look to see if there is an existing endpoint slice, and then associated service.
-	endpoint, endpoint_err := cs.k8sclient.GetEndpointSlice(ctx, namespace, serviceName)
-	if endpoint_err != nil {
+	endpoint, err := cs.k8sclient.GetEndpointSlice(ctx, namespace, serviceName)
+	if err != nil {
 		log.Infof("endpointSlice %s/%s not found: %+v", namespace, serviceName, endpoint)
-		return nil, nil, endpoint_err
+		return nil, nil, err
 	}
-	service, service_err := cs.k8sclient.GetService(ctx, namespace, serviceName)
-	if service_err != nil {
-		log.Infof("service_err %s/%s not found: %+v", namespace, serviceName, service)
-		return nil, endpoint, service_err
+	service, err := cs.k8sclient.GetService(ctx, namespace, serviceName)
+	if err != nil {
+		log.Infof("err %s/%s not found: %+v", namespace, serviceName, service)
+		return nil, endpoint, err
 	}
 	return service, endpoint, nil
 }
@@ -227,7 +227,7 @@ func (cs *CsiNfsService) makeNfsService(ctx context.Context, namespace, name str
 	nodeID := req.NodeId
 	// Export the volume to this node by calling back into the host driver
 	subreq := req
-	subreq.VolumeId = NFSToArrayVolumeID(req.VolumeId)
+	subreq.VolumeId = ToArrayVolumeID(req.VolumeId)
 	subreq.VolumeContext["csi-nfs"] = ""
 	log.Infof("Calling host driver to publish volume %s to node %s", subreq.VolumeId, subreq.NodeId)
 	// TODO: consider do we ever need a different access mode
@@ -370,9 +370,9 @@ func (cs *CsiNfsService) makeNfsService(ctx context.Context, namespace, name str
 func (cs *CsiNfsService) addNodeToNfsService(ctx context.Context, service *corev1.Service,
 	req *csi.ControllerPublishVolumeRequest,
 ) (*corev1.Service, error) {
-	nodeId := req.NodeId
-	if service.Labels["client/"+nodeId] == "" {
-		service.Labels["client/"+nodeId] = nodeId
+	nodeID := req.NodeId
+	if service.Labels["client/"+nodeID] == "" {
+		service.Labels["client/"+nodeID] = nodeID
 		cs.k8sclient.UpdateService(ctx, service.Namespace, service)
 	}
 	return service, nil
@@ -384,8 +384,7 @@ func (cs *CsiNfsService) addNodeToNfsService(ctx context.Context, service *corev
 func (cs *CsiNfsService) removeNodeFromNfsService(ctx context.Context, service *corev1.Service,
 	req *csi.ControllerUnpublishVolumeRequest,
 ) (bool, *corev1.Service, error) {
-	nodeId := req.NodeId
-	delete(service.Labels, "client/"+nodeId)
+	delete(service.Labels, "client/"+req.NodeId)
 	// Determine howmany clint labels remain. Return true if zero.
 	nclients := 0
 	for k := range service.Labels {
@@ -399,9 +398,9 @@ func (cs *CsiNfsService) removeNodeFromNfsService(ctx context.Context, service *
 }
 
 func (cs *CsiNfsService) callExportNfsVolume(ctx context.Context, nodeIPAddress string, exportNfsVolumeRequest *proto.ExportNfsVolumeRequest) (*proto.ExportNfsVolumeResponse, error) {
-	requestId := getRequestIdFromContext(ctx)
+	requestID := getRequestIDFromContext(ctx)
 	start := time.Now()
-	defer finish("callExportNfsVolume", requestId, start, ctx)
+	defer finish(ctx, "callExportNfsVolume", requestID, start)
 	// Call the node driver to do the NFS export.
 	log.Infof("Working on calling nfsExportVolume")
 	nodeClient, err := getNfsClient(nodeIPAddress, getServerPort())
@@ -416,9 +415,9 @@ func (cs *CsiNfsService) callExportNfsVolume(ctx context.Context, nodeIPAddress 
 }
 
 func (cs *CsiNfsService) callUnexportNfsVolume(ctx context.Context, nodeIPAddress string, unexportNfsVolumeRequest *proto.UnexportNfsVolumeRequest) (*proto.UnexportNfsVolumeResponse, error) {
-	requestId := getRequestIdFromContext(ctx)
+	requestID := getRequestIDFromContext(ctx)
 	start := time.Now()
-	defer finish("callUnexportNfsVolume", requestId, start, ctx)
+	defer finish(ctx, "callUnexportNfsVolume", requestID, start)
 	// Call the node driver to do the NFS unexport.
 	log.Infof("Working on calling nfsUnexportVolume")
 	nodeClient, err := getNfsClient(nodeIPAddress, getServerPort())
@@ -441,25 +440,25 @@ func (cs *CsiNfsService) ControllerUnpublishVolume(ctx context.Context, req *csi
 
 	log.Infof("Entered nfs ControllerUnpublishVolume %s %+v", req.VolumeId, req)
 	serviceName := VolumeIDToServiceName(req.VolumeId)
-	requestId := getRequestIdFromContext(ctx)
+	requestID := getRequestIDFromContext(ctx)
 	start := time.Now()
-	defer finish("ControllerUnpublishVolume", requestId, start, ctx)
+	defer finish(ctx, "ControllerUnpublishVolume", requestID, start)
 	resp := &csi.ControllerUnpublishVolumeResponse{}
 
 	// Get lock for concurrency
-	cs.LockPV(req.VolumeId, requestId)
+	cs.LockPV(req.VolumeId, requestID)
 	defer cs.UnlockPV(req.VolumeId)
 
 	service, slice, err := cs.getServiceAndSlice(ctx, serviceName)
 	if err != nil {
 		return resp, err
 	}
-	var nodeIpAddress string
+	var nodeIPAddress string
 	if len(slice.Endpoints) > 0 {
 		address := slice.Endpoints[0]
-		nodeIpAddress = address.Addresses[0]
+		nodeIPAddress = address.Addresses[0]
 	}
-	if nodeIpAddress == "" {
+	if nodeIPAddress == "" {
 		return resp, fmt.Errorf("endpointslice apparaently had no IP addresses %v", slice)
 	}
 
@@ -472,7 +471,7 @@ func (cs *CsiNfsService) ControllerUnpublishVolume(ctx context.Context, req *csi
 
 	// This was the last node using the service. Unexport the underlying array volume, and remove the service and slice.
 	if last {
-		log.Infof("ControllerUnpublish removing last node %s: %s", req.VolumeId, nodeIpAddress)
+		log.Infof("ControllerUnpublish removing last node %s: %s", req.VolumeId, nodeIPAddress)
 		unexportNfsVolumeContext := make(map[string]string)
 		// Call the Node to unpublish the volume completely
 		unexportNfsReq := &proto.UnexportNfsVolumeRequest{
@@ -480,9 +479,9 @@ func (cs *CsiNfsService) ControllerUnpublishVolume(ctx context.Context, req *csi
 			UnexportNfsContext: unexportNfsVolumeContext,
 		}
 		unexportNfsReq.UnexportNfsContext[ServiceName] = serviceName
-		unexportNfsResp, err := cs.callUnexportNfsVolume(ctx, nodeIpAddress, unexportNfsReq)
+		unexportNfsResp, err := cs.callUnexportNfsVolume(ctx, nodeIPAddress, unexportNfsReq)
 		if err != nil {
-			log.Infof("callUnexportNfsVolume failed: %s %v: %v %s", nodeIpAddress, unexportNfsReq, unexportNfsResp, err)
+			log.Infof("callUnexportNfsVolume failed: %s %v: %v %s", nodeIPAddress, unexportNfsReq, unexportNfsResp, err)
 			return resp, err
 		}
 		// Delete the endpoint slice
@@ -498,57 +497,55 @@ func (cs *CsiNfsService) ControllerUnpublishVolume(ctx context.Context, req *csi
 			return resp, err
 		}
 		// Call the array driver to unexport the array volume. to the node
-		arrayId := NFSToArrayVolumeID(req.VolumeId)
-		req.VolumeId = arrayId
+		arrayID := ToArrayVolumeID(req.VolumeId)
+		req.VolumeId = arrayID
 		subreq := req
 		return cs.vcsi.ControllerUnpublishVolume(ctx, subreq)
 	}
 	return resp, nil
 }
 
-func (cs *CsiNfsService) ValidateVolumeCapabilities(ctx context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
+func (cs *CsiNfsService) ValidateVolumeCapabilities(_ context.Context, _ *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
 	// Implement your logic here
 	return &csi.ValidateVolumeCapabilitiesResponse{}, nil
 }
 
-func (cs *CsiNfsService) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
+func (cs *CsiNfsService) ListVolumes(_ context.Context, _ *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
 	// Implement your logic here
 	return &csi.ListVolumesResponse{}, nil
 }
 
-func (cs *CsiNfsService) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
+func (cs *CsiNfsService) GetCapacity(_ context.Context, _ *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
 	// Implement your logic here
 	return &csi.GetCapacityResponse{}, nil
 }
 
-func (cs *CsiNfsService) ControllerGetCapabilities(ctx context.Context, req *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
+func (cs *CsiNfsService) ControllerGetCapabilities(_ context.Context, _ *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
 	// Implement your logic here
 	return &csi.ControllerGetCapabilitiesResponse{}, nil
 }
 
-func (cs *CsiNfsService) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
+func (cs *CsiNfsService) CreateSnapshot(_ context.Context, _ *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
 	// Implement your logic here
 	return &csi.CreateSnapshotResponse{}, nil
 }
 
-func (cs *CsiNfsService) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
+func (cs *CsiNfsService) DeleteSnapshot(_ context.Context, _ *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
 	// Implement your logic here
 	return &csi.DeleteSnapshotResponse{}, nil
 }
 
-func (cs *CsiNfsService) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
+func (cs *CsiNfsService) ListSnapshots(_ context.Context, _ *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
 	// Implement your logic here
 	return &csi.ListSnapshotsResponse{}, nil
 }
 
-func (cs *CsiNfsService) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
+func (cs *CsiNfsService) ControllerExpandVolume(_ context.Context, _ *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
 	// Implement your logic here
 	return &csi.ControllerExpandVolumeResponse{}, nil
 }
 
-func (cs *CsiNfsService) ControllerGetVolume(
-	ctx context.Context,
-	req *csi.ControllerGetVolumeRequest) (
+func (cs *CsiNfsService) ControllerGetVolume(_ context.Context, _ *csi.ControllerGetVolumeRequest) (
 	*csi.ControllerGetVolumeResponse, error,
 ) {
 	// return nil, ni
