@@ -607,13 +607,13 @@ func TestGetNodeByCSINodeId(t *testing.T) {
 	}{
 		{
 			name:      "successful retrieval",
-			driverKey: "csi.volume.kubernetes.io/nodeid",
-			csiNodeId: "node1",
+			driverKey: "csi-powerstore.dellemc.com",
+			csiNodeId: "csi-node-e8d45b5d10cc4f79953ba100c7fff4cb-10.20.30.40",
 			wantNode: &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "node1",
 					Annotations: map[string]string{
-						"csi.volume.kubernetes.io/nodeid": "node1",
+						"csi.volume.kubernetes.io/nodeid": "{\"csi-powerstore.dellemc.com\": \"csi-node-e8d45b5d10cc4f79953ba100c7fff4cb-10.20.30.40\",\"csi-vxflexos.dellemc.com\": \"638AD887-6FC4-4A8E-B3D1-DE4A9023BE3B\"}",
 					},
 				},
 			},
