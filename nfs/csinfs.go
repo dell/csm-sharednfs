@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+//go:generate mockgen -destination=mocks/service.go -package=mocks github.com/dell/csm-hbnfs/nfs Service
 type Service interface {
 	csi.ControllerServer
 	csi.IdentityServer
@@ -54,7 +55,7 @@ type CsiNfsService struct {
 	nodeIPAddress   string
 	podCIDR         string
 	nodeName        string
-	failureRetries	int
+	failureRetries  int
 
 	k8sclient *k8s.K8sClient
 	executor  Executor
@@ -109,7 +110,7 @@ func New(provisionerName string) Service {
 	nfsService = &CsiNfsService{
 		provisionerName: provisionerName,
 		executor:        &LocalExecutor{},
-		failureRetries: 10,
+		failureRetries:  10,
 	}
 	return nfsService
 }

@@ -18,6 +18,7 @@ package nfs
 
 import (
 	"context"
+	"reflect"
 	"testing"
 	"time"
 
@@ -495,6 +496,104 @@ func TestReassignVolume(t *testing.T) {
 
 			if tt.wantErr && res {
 				t.Error("expecting error but reassign is successful")
+			}
+		})
+	}
+}
+
+func TestUpdateEndpointSlice(t *testing.T) {
+	slice := &discoveryv1.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "mySlice",
+			Labels: map[string]string{
+				"pvName": "pv1",
+				"nodeID": "myNode",
+			},
+
+			Annotations: map[string]string{
+				DriverVolumeID: "vol1",
+			},
+		},
+		Endpoints: []discoveryv1.Endpoint{
+			{
+				Addresses: []string{"1.2.3.4"},
+			},
+		},
+	}
+
+	tests := []struct {
+		name      string
+		configure func(t *testing.T) *CsiNfsService
+		wantErr   bool
+	}{
+		{
+			name: "Success: Reassign volume with proper export",
+			configure: func(t *testing.T) *CsiNfsService {
+				// Create a new fake clientset
+				clientset := fake.NewSimpleClientset()
+
+				s := &CsiNfsService{
+					k8sclient: &k8s.K8sClient{
+						Clientset: clientset,
+					},
+				}
+
+				clientset.DiscoveryV1().EndpointSlices("").Create(context.Background(), slice, metav1.CreateOptions{})
+
+				return s
+			},
+			wantErr: false,
+		},
+		{
+			name: "Fail: Unable to update endpoint slice",
+			configure: func(t *testing.T) *CsiNfsService {
+				// Create a new fake clientset
+				clientset := fake.NewSimpleClientset()
+
+				s := &CsiNfsService{
+					k8sclient: &k8s.K8sClient{
+						Clientset: clientset,
+					},
+				}
+
+				return s
+			},
+			wantErr: true,
+		},
+	}
+
+	updatedNode := &v1.Node{
+		Status: v1.NodeStatus{
+			Addresses: []v1.NodeAddress{
+				{
+					Address: "5.6.7.8",
+				},
+			},
+		},
+	}
+
+	// set endpoint slice for unit tests
+	endpointSliceTimeout = 50 * time.Millisecond
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := tt.configure(t)
+			ctx := context.Background()
+
+			err := s.updateEndpointSlice(ctx, slice, "myNode", updatedNode)
+			if tt.wantErr && err == nil {
+				t.Error("expected an error but didn't get one")
+			}
+
+			if !tt.wantErr {
+				result, err := s.k8sclient.UpdateEndpointSlice(ctx, DriverNamespace, slice)
+				if err != nil {
+					t.Error(err)
+				}
+
+				if !reflect.DeepEqual(result.Endpoints[0].Addresses, result.Endpoints[0].Addresses) {
+					t.Error("endpoint slice was not updated")
+				}
 			}
 		})
 	}
