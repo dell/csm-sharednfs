@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"strings"
 	"sync"
 	"syscall"
@@ -37,6 +36,8 @@ import (
 
 type nfsServer struct {
 	proto.UnimplementedNfsServer
+	executor  Executor
+	unmounter Unmounter
 	// Embed the unimplemented server
 }
 
@@ -153,16 +154,14 @@ func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsV
 	}
 
 	log.Infof("Calling chroot chmod %s %o", path, NfsFileMode)
-	cmd := exec.Command("chroot", "/noderoot", "chmod", NfsFileModeString, path)
-	output, err := cmd.CombinedOutput()
+	output, err := nfs.executor.ExecuteCommand("chroot", "/noderoot", "chmod", NfsFileModeString, path)
 	if err != nil {
 		log.Errorf("failed chroot chmod output: %s %s", err, string(output))
 		return resp, err
 	}
 
 	// Read the directory entry for the path (debug)
-	cmd = exec.Command("chroot", "/noderoot", "ls", "-ld", path)
-	output, _ = cmd.CombinedOutput()
+	output, _ = nfs.executor.ExecuteCommand("chroot", "/noderoot", "ls", "-ld", path)
 	log.Infof("ls -ld %s:\n %s", path, string(output))
 
 	// Add entry in /etc/exports
@@ -300,7 +299,7 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 		for _, export := range exports {
 			exportDir := noderoot + "/" + export
 			log.Infof("Attempting unmount %s", NfsExportDirectory)
-			err := syscall.Unmount(exportDir, 0)
+			err := nfs.unmounter.Unmount(exportDir, 0)
 			if err != nil {
 				log.Errorf("Error unmounting %s: %s", NfsExportDirectory, err)
 			} else {
