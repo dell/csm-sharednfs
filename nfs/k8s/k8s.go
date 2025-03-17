@@ -18,6 +18,7 @@ package k8s
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	//	"path/filepath"
@@ -141,10 +142,16 @@ func (kc *K8sClient) GetNodeByCSINodeId(ctx context.Context, driverKey string, c
 	if err != nil {
 		return nil, fmt.Errorf("failed to list nodes: %w", err)
 	}
-
 	for _, node := range nodeList.Items {
-		if value, exists := node.Annotations[driverKey]; exists && value == csiNodeId {
-			return &node, nil
+		if annotation, exists := node.Annotations["csi.volume.kubernetes.io/nodeid"]; exists {
+			var nodeIdMap map[string]string
+			if err := json.Unmarshal([]byte(annotation), &nodeIdMap); err != nil {
+				log.Printf("Failed to unmarshal annotation for node %s: %v", node.Name, err)
+				continue
+			}
+			if value, found := nodeIdMap[driverKey]; found && value == csiNodeId {
+				return &node, nil
+			}
 		}
 	}
 	return nil, fmt.Errorf("failed to find a Node matching csiNodeId %s", csiNodeId)
