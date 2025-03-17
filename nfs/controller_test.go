@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
@@ -343,4 +344,55 @@ func TestControllerPublishVolume(t *testing.T) {
 			assert.Equal(t, test.expectedErr, err)
 		})
 	}
+}
+
+func TestControllerUnpublishVolume(t *testing.T) {
+	t.Run("endpoint error", func(t *testing.T) {
+		ctx := context.Background()
+		fakeK8sClient := fake.NewClientset()
+
+		csiNfsServce := &CsiNfsService{
+			k8sclient: &k8s.K8sClient{
+				Clientset: fakeK8sClient,
+			},
+		}
+
+		req := csi.ControllerUnpublishVolumeRequest{
+			VolumeId: "test-volume",
+			NodeId:   "test-node",
+		}
+
+		_, err := csiNfsServce.ControllerUnpublishVolume(ctx, &req)
+		assert.Contains(t, err.Error(), "endpointslices")
+	})
+
+	t.Run("service error", func(t *testing.T) {
+		ctx := context.Background()
+		fakeK8sClient := fake.NewClientset()
+		fakeK8sClient.DiscoveryV1().EndpointSlices("").Create(ctx, &discoveryv1.EndpointSlice{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-volume",
+			},
+			Endpoints: []discoveryv1.Endpoint{
+				{
+					Addresses: []string{
+						"127.0.0.1",
+					},
+				},
+			},
+		}, metav1.CreateOptions{})
+		csiNfsServce := &CsiNfsService{
+			k8sclient: &k8s.K8sClient{
+				Clientset: fakeK8sClient,
+			},
+		}
+
+		req := csi.ControllerUnpublishVolumeRequest{
+			VolumeId: "test-volume",
+			NodeId:   "test-node",
+		}
+
+		_, err := csiNfsServce.ControllerUnpublishVolume(ctx, &req)
+		assert.Contains(t, err.Error(), "services")
+	})
 }
