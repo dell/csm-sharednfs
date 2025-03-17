@@ -144,7 +144,6 @@ func TestGetNodeExportCounts(t *testing.T) {
 		ip           string
 		createServer func(t *testing.T)
 		want         map[string]int
-		wantErr      bool
 	}{
 		{
 			name: "Success - Test GetNodeExportCounts, empty list",
@@ -152,8 +151,7 @@ func TestGetNodeExportCounts(t *testing.T) {
 				server := mocks.NewMockNfsServer(gomock.NewController(t))
 				createMockServer(t, localHostIP, server)
 			},
-			want:    map[string]int{},
-			wantErr: false,
+			want: map[string]int{},
 		},
 		{
 			name: "Success - Test GetNodeExportCounts, valid response",
@@ -170,8 +168,7 @@ func TestGetNodeExportCounts(t *testing.T) {
 					status:   "",
 				}
 			},
-			want:    map[string]int{"myNode": 2},
-			wantErr: false,
+			want: map[string]int{"myNode": 2},
 		},
 		{
 			name: "Success - Test GetNodeExportCounts, inRecovery",
@@ -189,8 +186,7 @@ func TestGetNodeExportCounts(t *testing.T) {
 					inRecovery: true,
 				}
 			},
-			want:    map[string]int{},
-			wantErr: false,
+			want: map[string]int{},
 		},
 	}
 
@@ -203,11 +199,7 @@ func TestGetNodeExportCounts(t *testing.T) {
 			// Give it time for the server to setup
 			time.Sleep(50 * time.Millisecond)
 
-			resp, err := s.getNodeExportCounts(context.Background())
-			if (err != nil) != tt.wantErr {
-				t.Errorf("getNodeExportCounts() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
+			resp := s.getNodeExportCounts(context.Background())
 
 			if !reflect.DeepEqual(resp, tt.want) {
 				t.Errorf("getNodeExportCounts() = %v, want %v", resp, tt.want)
