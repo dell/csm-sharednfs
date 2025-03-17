@@ -404,7 +404,7 @@ func (cs *CsiNfsService) callExportNfsVolume(ctx context.Context, nodeIPAddress 
 	defer finish("callExportNfsVolume", requestId, start, ctx)
 	// Call the node driver to do the NFS export.
 	log.Infof("Working on calling nfsExportVolume")
-	nodeClient, err := getNfsClient(nodeIPAddress, nfsServerPort)
+	nodeClient, err := getNfsClient(nodeIPAddress, getServerPort())
 	if err != nil {
 		log.Errorf("Couldn't getNfsClient: %s", err.Error())
 		deleteNfsClient(nodeIPAddress)
@@ -421,7 +421,7 @@ func (cs *CsiNfsService) callUnexportNfsVolume(ctx context.Context, nodeIPAddres
 	defer finish("callUnexportNfsVolume", requestId, start, ctx)
 	// Call the node driver to do the NFS unexport.
 	log.Infof("Working on calling nfsUnexportVolume")
-	nodeClient, err := getNfsClient(nodeIPAddress, nfsServerPort)
+	nodeClient, err := getNfsClient(nodeIPAddress, getServerPort())
 	if err != nil {
 		log.Errorf("Couldn't getNfsClient: %s", err.Error())
 		deleteNfsClient(nodeIPAddress)

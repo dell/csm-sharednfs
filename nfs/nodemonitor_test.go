@@ -18,8 +18,10 @@ package nfs
 
 import (
 	"context"
+	"math/rand"
 	"net"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
@@ -149,6 +151,7 @@ func TestGetNodeExportCounts(t *testing.T) {
 			name: "Success - Test GetNodeExportCounts, empty list",
 			createServer: func(t *testing.T) {
 				server := mocks.NewMockNfsServer(gomock.NewController(t))
+				nodeIpToStatus = make(map[string]*NodeStatus)
 				createMockServer(t, localHostIP, server)
 			},
 			want: map[string]int{},
@@ -464,7 +467,10 @@ func TestGetNodeStatus(t *testing.T) {
 }
 
 func createMockServer(t *testing.T, ip string, mockServer *mocks.MockNfsServer) {
-	lis, err := net.Listen("tcp", ip+":"+nfsServerPort)
+	// rand.Seed(time.Now().UnixNano())
+	// randomNumber := rand.Intn(9000) + 1000
+	setServerPort(strconv.Itoa(rand.Intn(9000) + 1000))
+	lis, err := net.Listen("tcp", ip+":"+getServerPort())
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
 	}

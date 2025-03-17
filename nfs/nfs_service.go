@@ -48,7 +48,22 @@ const (
 	NfsFileModeString = "02777"
 )
 
-var nfsServerPort = "2050"
+var (
+	serverPort    = "2050"
+	serverPortMux = &sync.Mutex{}
+)
+
+func setServerPort(port string) {
+	serverPortMux.Lock()
+	defer serverPortMux.Unlock()
+	serverPort = port
+}
+
+func getServerPort() string {
+	serverPortMux.Lock()
+	defer serverPortMux.Unlock()
+	return serverPort
+}
 
 // Starts an NFS server on the specified string port
 func startNfsServiceServer(ipAddress, port string) error {

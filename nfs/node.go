@@ -29,6 +29,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var (
+	nodePublishTimeout = 10 * time.Second
+)
+
 func (ns *CsiNfsService) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 	// Implement your logic here
 	// Add an nfs mount of the volume to the staging directory
@@ -58,7 +62,7 @@ func (ns *CsiNfsService) NodePublishVolume(ctx context.Context, req *csi.NodePub
 			return resp, err
 		}
 		log.Infof("NodePublishVolume %s retries %d error %s", req.VolumeId, retries, err)
-		time.Sleep(10 * time.Second)
+		time.Sleep(nodePublishTimeout)
 	}
 	return resp, err
 }

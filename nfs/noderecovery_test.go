@@ -75,6 +75,8 @@ func TestNodeRecovery(t *testing.T) {
 					},
 				}
 
+				nodeIpToStatus = make(map[string]*NodeStatus)
+
 				return s
 			},
 		},
@@ -96,6 +98,8 @@ func TestNodeRecovery(t *testing.T) {
 				createMockServer(t, "127.0.0.2", server)
 				// Give it time for the server to setup
 				time.Sleep(50 * time.Millisecond)
+
+				nodeIpToStatus = make(map[string]*NodeStatus)
 
 				return s
 			},

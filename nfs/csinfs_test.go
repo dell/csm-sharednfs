@@ -267,6 +267,7 @@ func TestNew(t *testing.T) {
 			want: &CsiNfsService{
 				provisionerName: "csi-powerstore.dellemc.com",
 				executor:        &LocalExecutor{},
+				failureRetries:  10,
 			},
 		},
 	}
@@ -309,6 +310,7 @@ func TestPutVcsiService(t *testing.T) {
 				vcsi:            &CsiNfsService{},
 				provisionerName: "csi-powerstore.dellemc.com",
 				executor:        &LocalExecutor{},
+				failureRetries:  10,
 			},
 		},
 	}
