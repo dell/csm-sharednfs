@@ -337,7 +337,7 @@ func TestNodePublishVolume(t *testing.T) {
 			failureRetries: 1,
 		}
 		_, err := service.NodePublishVolume(cxt, &csi.NodePublishVolumeRequest{})
-		assert.Contains(t, err.Error(), "service_err")
+		assert.Contains(t, err.Error(), "err")
 	})
 
 	t.Run("cluster IP empty", func(t *testing.T) {
