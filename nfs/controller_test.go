@@ -395,4 +395,37 @@ func TestControllerUnpublishVolume(t *testing.T) {
 		_, err := csiNfsServce.ControllerUnpublishVolume(ctx, &req)
 		assert.Contains(t, err.Error(), "services")
 	})
+
+	t.Run("slice has no IP addr", func(t *testing.T) {
+		ctx := context.Background()
+		fakeK8sClient := fake.NewClientset()
+		fakeK8sClient.DiscoveryV1().EndpointSlices("").Create(ctx, &discoveryv1.EndpointSlice{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-volume",
+			},
+			Endpoints: []discoveryv1.Endpoint{
+				{
+					Addresses: []string{""},
+				},
+			},
+		}, metav1.CreateOptions{})
+		fakeK8sClient.CoreV1().Services("").Create(ctx, &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-volume",
+			},
+		}, metav1.CreateOptions{})
+		csiNfsServce := &CsiNfsService{
+			k8sclient: &k8s.K8sClient{
+				Clientset: fakeK8sClient,
+			},
+		}
+
+		req := csi.ControllerUnpublishVolumeRequest{
+			VolumeId: "test-volume",
+			NodeId:   "test-node",
+		}
+
+		_, err := csiNfsServce.ControllerUnpublishVolume(ctx, &req)
+		assert.Contains(t, err.Error(), "endpointslice apparaently had no IP addresses")
+	})
 }
