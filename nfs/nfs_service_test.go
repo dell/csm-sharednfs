@@ -60,6 +60,7 @@ func TestExportMultipleNfsVolume(t *testing.T) {
 		expectedResp *proto.ExportMultipleNfsVolumesResponse
 		service      *mocks.MockService
 		executor     *mocks.MockExecutor
+		osMock       *mocks.MockOSInterface
 		expectedErr  error
 	}{
 		{
@@ -85,11 +86,24 @@ func TestExportMultipleNfsVolume(t *testing.T) {
 
 			executor: func() *mocks.MockExecutor {
 				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
-				mockExecutor.EXPECT().ExecuteCommand(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return([]byte{}, nil)
-				mockExecutor.EXPECT().ExecuteCommand(gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return([]byte{}, nil)
 				mockExecutor.EXPECT().ExecuteCommand(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(2).Return([]byte{}, nil)
 				mockExecutor.EXPECT().ExecuteCommand(chroot, nodeRoot, exportfs, "-r", "-a").Return(nil, nil).AnyTimes()
 				return mockExecutor
+			}(),
+
+			osMock: func() *mocks.MockOSInterface {
+				mockOs := mocks.NewMockOSInterface(gomock.NewController(t))
+				mockOs.EXPECT().Chown(gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(nil)
+				mockOs.EXPECT().Chmod(gomock.Any(), gomock.Any()).Times(1).Return(nil)
+
+				mockOs.EXPECT().Open(gomock.Any()).Times(1).DoAndReturn(func(name string) (*os.File, error) {
+					return os.Open(name)
+				})
+				mockOs.EXPECT().OpenFile(gomock.Any(), gomock.Any(), gomock.Any()).Times(1).DoAndReturn(func(name string, flag int, perm os.FileMode) (*os.File, error) {
+					return os.OpenFile(name, flag, perm)
+				})
+
+				return mockOs
 			}(),
 			expectedErr: nil,
 		},
@@ -116,6 +130,10 @@ func TestExportMultipleNfsVolume(t *testing.T) {
 			executor: func() *mocks.MockExecutor {
 				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
 				return mockExecutor
+			}(),
+			osMock: func() *mocks.MockOSInterface {
+				mockOs := mocks.NewMockOSInterface(gomock.NewController(t))
+				return mockOs
 			}(),
 			expectedErr: fmt.Errorf("failed to mount volume"),
 		},
@@ -145,6 +163,9 @@ func TestExportMultipleNfsVolume(t *testing.T) {
 			nfs := &nfsServer{
 				executor: tc.executor,
 			}
+
+			opSys = tc.osMock
+
 			_, err = nfs.ExportMultipleNfsVolumes(context.Background(), tc.request)
 			_ = file.Close()
 			_ = os.RemoveAll(exportsDir)
@@ -173,6 +194,7 @@ func TestUnExportMultipleNfsVolume(t *testing.T) {
 		expected    *proto.UnexportMultipleNfsVolumesResponse
 		service     *mocks.MockService
 		executor    *mocks.MockExecutor
+		osMock      *mocks.MockOSInterface
 		expectedErr error
 	}{
 		{
@@ -193,13 +215,23 @@ func TestUnExportMultipleNfsVolume(t *testing.T) {
 			},
 			service: func() *mocks.MockService {
 				service := mocks.NewMockService(gomock.NewController(t))
-				service.EXPECT().UnmountVolume(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(nil)
+				service.EXPECT().UnmountVolume(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 				return service
 			}(),
 			executor: func() *mocks.MockExecutor {
 				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
 				mockExecutor.EXPECT().ExecuteCommand(chroot, nodeRoot, exportfs, "-r", "-a").Return(nil, nil).AnyTimes()
 				return mockExecutor
+			}(),
+			osMock: func() *mocks.MockOSInterface {
+				mockOs := mocks.NewMockOSInterface(gomock.NewController(t))
+				mockOs.EXPECT().Open(gomock.Any()).Times(1).DoAndReturn(func(name string) (*os.File, error) {
+					return os.Open(name)
+				})
+				mockOs.EXPECT().OpenFile(gomock.Any(), gomock.Any(), gomock.Any()).Times(1).DoAndReturn(func(name string, flag int, perm os.FileMode) (*os.File, error) {
+					return os.OpenFile(name, flag, perm)
+				})
+				return mockOs
 			}(),
 			expectedErr: nil,
 		},
@@ -221,13 +253,23 @@ func TestUnExportMultipleNfsVolume(t *testing.T) {
 			},
 			service: func() *mocks.MockService {
 				service := mocks.NewMockService(gomock.NewController(t))
-				// service.EXPECT().UnmountVolume(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(3).Return(fmt.Errorf("failed to unmount"))
+				service.EXPECT().UnmountVolume(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("failed to unmount")).AnyTimes()
 				return service
 			}(),
 			executor: func() *mocks.MockExecutor {
 				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
 				mockExecutor.EXPECT().ExecuteCommand(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(2).Return([]byte{}, fmt.Errorf("failed to resync"))
 				return mockExecutor
+			}(),
+			osMock: func() *mocks.MockOSInterface {
+				mockOs := mocks.NewMockOSInterface(gomock.NewController(t))
+				mockOs.EXPECT().Open(gomock.Any()).Times(1).DoAndReturn(func(name string) (*os.File, error) {
+					return os.Open(name)
+				})
+				mockOs.EXPECT().OpenFile(gomock.Any(), gomock.Any(), gomock.Any()).Times(1).DoAndReturn(func(name string, flag int, perm os.FileMode) (*os.File, error) {
+					return os.OpenFile(name, flag, perm)
+				})
+				return mockOs
 			}(),
 			expectedErr: fmt.Errorf("failed to resync"),
 		},
@@ -265,6 +307,8 @@ func TestUnExportMultipleNfsVolume(t *testing.T) {
 				return tc.executor
 			}
 
+			opSys = tc.osMock
+
 			_, err = nfs.UnexportMultipleNfsVolumes(context.Background(), tc.request)
 			_ = file.Close()
 			_ = os.RemoveAll(exportsDir)
@@ -295,6 +339,14 @@ func TestNFSGetExports(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	mockOs := mocks.NewMockOSInterface(gomock.NewController(t))
+	mockOs.EXPECT().Open(gomock.Any()).Times(1).DoAndReturn(func(name string) (*os.File, error) {
+		return os.Open(name)
+	})
+
+	opSys = mockOs
+
 	_, err = file.WriteString("export 127.0.0.1(rw)\n")
 	if err != nil {
 		t.Fatal(err)
@@ -321,6 +373,7 @@ func TestNFSPing(t *testing.T) {
 		expected         *proto.PingResponse
 		nfs              *nfsServer
 		executor         *mocks.MockExecutor
+		osMock           *mocks.MockOSInterface
 		createExportFile func() (file *os.File)
 		deleteExportFile func(file *os.File)
 		expectedErr      error
@@ -341,6 +394,10 @@ func TestNFSPing(t *testing.T) {
 			executor: func() *mocks.MockExecutor {
 				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
 				return mockExecutor
+			}(),
+			osMock: func() *mocks.MockOSInterface {
+				mockOs := mocks.NewMockOSInterface(gomock.NewController(t))
+				return mockOs
 			}(),
 			createExportFile: func() (file *os.File) {
 				return nil
@@ -369,6 +426,16 @@ func TestNFSPing(t *testing.T) {
 				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
 				mockExecutor.EXPECT().ExecuteCommand(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return([]byte{}, nil)
 				return mockExecutor
+			}(),
+			osMock: func() *mocks.MockOSInterface {
+				mockOs := mocks.NewMockOSInterface(gomock.NewController(t))
+				mockOs.EXPECT().Open(gomock.Any()).DoAndReturn(func(name string) (*os.File, error) {
+					return os.Open(name)
+				}).AnyTimes()
+				mockOs.EXPECT().OpenFile(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(name string, flag int, perm os.FileMode) (*os.File, error) {
+					return os.OpenFile(name, flag, perm)
+				}).AnyTimes()
+				return mockOs
 			}(),
 			createExportFile: func() *os.File {
 				err := os.MkdirAll(exportsDir, os.ModePerm)
@@ -418,6 +485,16 @@ func TestNFSPing(t *testing.T) {
 				mockExecutor.EXPECT().ExecuteCommand(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return([]byte{}, nil)
 				return mockExecutor
 			}(),
+			osMock: func() *mocks.MockOSInterface {
+				mockOs := mocks.NewMockOSInterface(gomock.NewController(t))
+				mockOs.EXPECT().Open(gomock.Any()).DoAndReturn(func(name string) (*os.File, error) {
+					return os.Open(name)
+				}).AnyTimes()
+				mockOs.EXPECT().OpenFile(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(name string, flag int, perm os.FileMode) (*os.File, error) {
+					return os.OpenFile(name, flag, perm)
+				}).AnyTimes()
+				return mockOs
+			}(),
 			createExportFile: func() *os.File {
 				err := os.MkdirAll(exportsDir, os.ModePerm)
 				if err != nil {
@@ -461,6 +538,16 @@ func TestNFSPing(t *testing.T) {
 				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
 				return mockExecutor
 			}(),
+			osMock: func() *mocks.MockOSInterface {
+				mockOs := mocks.NewMockOSInterface(gomock.NewController(t))
+				mockOs.EXPECT().Open(gomock.Any()).DoAndReturn(func(name string) (*os.File, error) {
+					return os.Open(name)
+				}).AnyTimes()
+				mockOs.EXPECT().OpenFile(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(name string, flag int, perm os.FileMode) (*os.File, error) {
+					return os.OpenFile(name, flag, perm)
+				}).AnyTimes()
+				return mockOs
+			}(),
 			createExportFile: func() (file *os.File) {
 				return nil
 			},
@@ -478,6 +565,7 @@ func TestNFSPing(t *testing.T) {
 			GetLocalExecutor = func() Executor {
 				return tc.executor
 			}
+			opSys = tc.osMock
 
 			resp, err := tc.nfs.Ping(context.Background(), tc.request)
 

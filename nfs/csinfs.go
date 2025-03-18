@@ -78,6 +78,10 @@ type OSInterface interface {
 	Open(string) (*os.File, error)
 	// os.OpenFile()
 	OpenFile(string, int, os.FileMode) (*os.File, error)
+	// os.Chown()
+	Chown(string, int, int) error
+	// os.Chmod()
+	Chmod(string, os.FileMode) error
 }
 
 type OSImpl struct{}
@@ -102,6 +106,14 @@ func (o *OSImpl) Open(fileName string) (*os.File, error) {
 
 func (o *OSImpl) OpenFile(fileName string, flag int, perm os.FileMode) (*os.File, error) {
 	return os.OpenFile(fileName, flag, perm)
+}
+
+func (o *OSImpl) Chown(fileName string, uid, gid int) error {
+	return os.Chown(fileName, uid, gid)
+}
+
+func (o *OSImpl) Chmod(fileName string, mode os.FileMode) error {
+	return os.Chmod(fileName, mode)
 }
 
 func IsNFSStorageClass(parameters map[string]string) bool {

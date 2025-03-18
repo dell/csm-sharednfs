@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -148,24 +147,22 @@ func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsV
 		return resp, err
 	}
 	log.Infof("Calling Chown %s %d %d", path, RootUID, nfsGroupID)
-	// err = os.Chown(path, RootUID, nfsGroupID)
-	output, err := nfs.executor.ExecuteCommand("chown", strconv.Itoa(RootUID), ":", strconv.Itoa(nfsGroupID), path)
+	err = opSys.Chown(path, RootUID, nfsGroupID)
 	if err != nil {
-		log.Errorf("failed chown output: %s %s", err, output)
+		log.Errorf("failed chown output: %s", err)
 		return resp, err
 	}
 
 	// This code is required (doesn't work without it), not sure if the chrooot chmod is needed also.
 	log.Infof("Calling Chmod %s mode %o", path, NfsFileMode)
-	// err = os.Chmod(path, NfsFileMode)
-	output, err = nfs.executor.ExecuteCommand("chmod", strconv.Itoa(NfsFileMode), path)
+	err = opSys.Chmod(path, NfsFileMode)
 	if err != nil {
-		log.Errorf("failed chmod output: %s %s", err, output)
+		log.Errorf("failed chmod output: %s", err)
 		return resp, err
 	}
 
 	log.Infof("Calling chroot chmod %s %o", path, NfsFileMode)
-	output, err = nfs.executor.ExecuteCommand("chroot", "/noderoot", "chmod", NfsFileModeString, path)
+	output, err := nfs.executor.ExecuteCommand("chroot", "/noderoot", "chmod", NfsFileModeString, path)
 	if err != nil {
 		log.Errorf("failed chroot chmod output: %s %s", err, string(output))
 		return resp, err

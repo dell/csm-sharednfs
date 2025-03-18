@@ -41,6 +41,34 @@ func (m *MockOSInterface) EXPECT() *MockOSInterfaceMockRecorder {
 	return m.recorder
 }
 
+// Chmod mocks base method.
+func (m *MockOSInterface) Chmod(arg0 string, arg1 fs.FileMode) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Chmod", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Chmod indicates an expected call of Chmod.
+func (mr *MockOSInterfaceMockRecorder) Chmod(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Chmod", reflect.TypeOf((*MockOSInterface)(nil).Chmod), arg0, arg1)
+}
+
+// Chown mocks base method.
+func (m *MockOSInterface) Chown(arg0 string, arg1, arg2 int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Chown", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Chown indicates an expected call of Chown.
+func (mr *MockOSInterfaceMockRecorder) Chown(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Chown", reflect.TypeOf((*MockOSInterface)(nil).Chown), arg0, arg1, arg2)
+}
+
 // Getenv mocks base method.
 func (m *MockOSInterface) Getenv(arg0 string) string {
 	m.ctrl.T.Helper()
