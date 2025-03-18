@@ -39,26 +39,26 @@ func TestConnect(t *testing.T) {
 		name              string
 		newForConfigFunc  func(config *rest.Config) (kubernetes.Interface, error)
 		restInClusterFunc func() (*rest.Config, error)
-		want              *K8sClient
+		want              *Client
 		wantErr           bool
 	}{
 		{
 			name: "Test Connect with successful connection",
-			newForConfigFunc: func(config *rest.Config) (kubernetes.Interface, error) {
+			newForConfigFunc: func(_ *rest.Config) (kubernetes.Interface, error) {
 				return fakeClientSet, nil
 			},
 			restInClusterFunc: func() (*rest.Config, error) {
 				return &rest.Config{}, nil
 			},
 
-			want: &K8sClient{
+			want: &Client{
 				Clientset: fakeClientSet,
 			},
 			wantErr: false,
 		},
 		{
 			name: "Test Connect with failed rest connection",
-			newForConfigFunc: func(config *rest.Config) (kubernetes.Interface, error) {
+			newForConfigFunc: func(_ *rest.Config) (kubernetes.Interface, error) {
 				return fake.NewSimpleClientset(), nil
 			},
 			restInClusterFunc: func() (*rest.Config, error) {
@@ -70,7 +70,7 @@ func TestConnect(t *testing.T) {
 		},
 		{
 			name: "Test Connect with failed k8s client connection",
-			newForConfigFunc: func(config *rest.Config) (kubernetes.Interface, error) {
+			newForConfigFunc: func(_ *rest.Config) (kubernetes.Interface, error) {
 				return nil, errors.New("failed to create k8s client")
 			},
 			restInClusterFunc: func() (*rest.Config, error) {
@@ -109,7 +109,7 @@ func TestCreateService(t *testing.T) {
 	}
 
 	// Create a fake K8sClient
-	k8sClient := &K8sClient{
+	k8sClient := &Client{
 		Clientset: clientset,
 	}
 
@@ -136,7 +136,7 @@ func TestGetService(t *testing.T) {
 		},
 	}
 	// Create a fake K8sClient
-	k8sClient := &K8sClient{
+	k8sClient := &Client{
 		Clientset: clientset,
 	}
 
@@ -170,7 +170,7 @@ func TestUpdateService(t *testing.T) {
 		},
 	}
 	// Create a fake K8sClient
-	k8sClient := &K8sClient{
+	k8sClient := &Client{
 		Clientset: clientset,
 	}
 
@@ -216,7 +216,7 @@ func TestDeleteService(t *testing.T) {
 		},
 	}
 	// Create a fake K8sClient
-	k8sClient := &K8sClient{
+	k8sClient := &Client{
 		Clientset: clientset,
 	}
 
@@ -253,7 +253,7 @@ func TestGetEndpointSlice(t *testing.T) {
 	}
 
 	// Create a fake K8sClient
-	k8sClient := &K8sClient{
+	k8sClient := &Client{
 		Clientset: clientset,
 	}
 
@@ -284,7 +284,7 @@ func TestCreateEndpointSlice(t *testing.T) {
 	}
 
 	// Create a fake K8sClient
-	k8sClient := &K8sClient{
+	k8sClient := &Client{
 		Clientset: clientset,
 	}
 
@@ -319,7 +319,7 @@ func TestUpdateEndpointSlice(t *testing.T) {
 	}
 
 	// Create a fake K8sClient
-	k8sClient := &K8sClient{
+	k8sClient := &Client{
 		Clientset: clientset,
 	}
 
@@ -359,7 +359,7 @@ func TestDeleteEndpointSlice(t *testing.T) {
 	}
 
 	// Create a fake K8sClient
-	k8sClient := &K8sClient{
+	k8sClient := &Client{
 		Clientset: clientset,
 	}
 
@@ -393,7 +393,7 @@ func TestGetPersistentVolume(t *testing.T) {
 	}
 
 	// Create a fake K8sClient
-	k8sClient := &K8sClient{
+	k8sClient := &Client{
 		Clientset: clientset,
 	}
 
@@ -426,7 +426,7 @@ func TestGetNode(t *testing.T) {
 	}
 
 	// Create a fake K8sClient
-	k8sClient := &K8sClient{
+	k8sClient := &Client{
 		Clientset: clientset,
 	}
 
@@ -512,7 +512,7 @@ func TestGetEndpointSlices(t *testing.T) {
 			}
 
 			// Create a fake K8sClient
-			k8sClient := &K8sClient{
+			k8sClient := &Client{
 				Clientset: clientset,
 			}
 
@@ -575,7 +575,7 @@ func TestGetAllNodes(t *testing.T) {
 			}
 
 			// Create a fake K8sClient
-			k8sClient := &K8sClient{
+			k8sClient := &Client{
 				Clientset: clientset,
 			}
 
@@ -601,7 +601,7 @@ func TestGetNodeByCSINodeId(t *testing.T) {
 	tests := []struct {
 		name      string
 		driverKey string
-		csiNodeId string
+		csiNodeID string
 		node      *v1.Node
 		wantNode  *v1.Node
 		wantErr   bool
@@ -609,7 +609,7 @@ func TestGetNodeByCSINodeId(t *testing.T) {
 		{
 			name:      "successful retrieval",
 			driverKey: "csi-powerstore.dellemc.com",
-			csiNodeId: "csi-node-e8d45b5d10cc4f79953ba100c7fff4cb-10.20.30.40",
+			csiNodeID: "csi-node-e8d45b5d10cc4f79953ba100c7fff4cb-10.20.30.40",
 			wantNode: &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "node1",
@@ -631,7 +631,7 @@ func TestGetNodeByCSINodeId(t *testing.T) {
 		{
 			name:      "bad json retrieval",
 			driverKey: "csi.volume.kubernetes.io/nodeid",
-			csiNodeId: "csi-node-e8d45b5d10cc4f79953ba100c7fff4cb-10.20.30.40",
+			csiNodeID: "csi-node-e8d45b5d10cc4f79953ba100c7fff4cb-10.20.30.40",
 			node: &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "node1",
@@ -646,7 +646,7 @@ func TestGetNodeByCSINodeId(t *testing.T) {
 		{
 			name:      "error retrieving nodes",
 			driverKey: "csi.volume.kubernetes.io/nodeid",
-			csiNodeId: "node2",
+			csiNodeID: "node2",
 			node: &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "node1",
@@ -666,7 +666,7 @@ func TestGetNodeByCSINodeId(t *testing.T) {
 			clientset := fake.NewSimpleClientset()
 
 			// Create a fake K8sClient
-			k8sClient := &K8sClient{
+			k8sClient := &Client{
 				Clientset: clientset,
 			}
 
@@ -678,7 +678,7 @@ func TestGetNodeByCSINodeId(t *testing.T) {
 			}
 
 			// Call the GetNodeByCSINodeId method
-			result, err := k8sClient.GetNodeByCSINodeId(context.Background(), tt.driverKey, tt.csiNodeId)
+			result, err := k8sClient.GetNodeByCSINodeID(context.Background(), tt.driverKey, tt.csiNodeID)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetNodeByCSINodeId() error = %v, wantErr %v", err, tt.wantErr)
 				return

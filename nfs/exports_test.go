@@ -90,10 +90,10 @@ func TestCheckExport(t *testing.T) {
 			name:      "error opening /noderoot/etc/exports",
 			directory: "/error/directory",
 			fileName:  exportsFile,
-			setup: func(dir string, fileName string) (*os.File, error) {
+			setup: func(_ string, _ string) (*os.File, error) {
 				return nil, nil
 			},
-			teardown: func(dir string, file *os.File) {
+			teardown: func(_ string, _ *os.File) {
 				GetBufioScanner = defaultGetBufioScanner
 			},
 			want:    false,
@@ -225,10 +225,10 @@ func TestGetExport(t *testing.T) {
 			name:      "error opening /noderoot/etc/exports",
 			directory: "/error/directory",
 			fileName:  "exports",
-			setup: func(dir string, fileName string) (*os.File, error) {
+			setup: func(_ string, _ string) (*os.File, error) {
 				return nil, nil
 			},
-			teardown: func(dir string, file *os.File) {
+			teardown: func(_ string, _ *os.File) {
 				GetBufioScanner = defaultGetBufioScanner
 			},
 			want:    false,
@@ -357,10 +357,10 @@ func TestGetNFSExports(t *testing.T) {
 			name:      "error opening /noderoot/etc/exports",
 			directory: "/error/directory",
 			fileName:  "exports",
-			setup: func(dir string, fileName string) (*os.File, error) {
+			setup: func(_ string, _ string) (*os.File, error) {
 				return nil, nil
 			},
-			teardown: func(dir string, file *os.File) {
+			teardown: func(_ string, _ *os.File) {
 				GetBufioScanner = defaultGetBufioScanner
 			},
 			want:    false,
@@ -701,10 +701,10 @@ func TestDeleteExport(t *testing.T) {
 			name:      "error opening /noderoot/etc/exports",
 			directory: exportsDir,
 			fileName:  exportsFile,
-			setup: func(dir string, fileName string) (*os.File, error) {
+			setup: func(_ string, _ string) (*os.File, error) {
 				return nil, nil
 			},
-			teardown: func(dir string, file *os.File) {
+			teardown: func(_ string, _ *os.File) {
 				GetBufioScanner = defaultGetBufioScanner
 			},
 			want:    true,
@@ -761,9 +761,9 @@ func TestRestartNFSMountd(t *testing.T) {
 			name:                 "execution error",
 			mockReturn:           []byte{},
 			wait:                 4 * time.Second,
-			mockRestartNFSError:  errors.New("failed to restart nfs-mountd:"),
+			mockRestartNFSError:  errors.New("failed to restart nfs-mountd"),
 			mockIsNFSActiveError: nil,
-			expectedError:        errors.New("failed to restart nfs-mountd:"),
+			expectedError:        errors.New("failed to restart nfs-mountd"),
 		},
 	}
 

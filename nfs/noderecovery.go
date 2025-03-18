@@ -40,7 +40,7 @@ var (
 )
 
 // exportCounts is a map of node name to number of mounts
-var exportCounts map[string]int = make(map[string]int)
+var exportCounts = make(map[string]int)
 
 // nodeRecovery is called as a goroutine from the pinger when it determines a node is down.
 // nodeRecovery is responsible for reassigning all the nfs volumes on the failed node to new servers.
@@ -50,10 +50,10 @@ var exportCounts map[string]int = make(map[string]int)
 //  2. Determine the number of exports used by each node.
 //  2. Loop through each endpointslice/service and determine what other nodes are using this volume.
 //     Ideally we would like to reassing the volume to a node that is using it.
-func (s *CsiNfsService) nodeRecovery(nodeIp string) {
+func (s *CsiNfsService) nodeRecovery(nodeIP string) {
 	ctx := context.Background()
 
-	selector := fmt.Sprintf("nodeIP=%s", nodeIp)
+	selector := fmt.Sprintf("nodeIP=%s", nodeIP)
 	endpointSlices, err := s.k8sclient.GetEndpointSlices(ctx, DriverNamespace, selector)
 	if err != nil {
 		log.Errorf("pinger: error retrieving endpointSlices: %s: %s", selector, err.Error())
@@ -96,9 +96,9 @@ func (s *CsiNfsService) nodeRecovery(nodeIp string) {
 func (s *CsiNfsService) reassignVolume(slice *discoveryv1.EndpointSlice) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), VolumeReassignTimeout)
 	defer cancel()
-	volumeId := slice.Annotations[DriverVolumeID]
-	s.HighPriorityLockPV(volumeId, "reassign")
-	defer s.UnlockPV(volumeId)
+	volumeID := slice.Annotations[DriverVolumeID]
+	s.HighPriorityLockPV(volumeID, "reassign")
+	defer s.UnlockPV(volumeID)
 
 	pvName := slice.Labels["pvName"]
 	startTime := time.Now()
@@ -134,7 +134,7 @@ func (s *CsiNfsService) reassignVolume(slice *discoveryv1.EndpointSlice) bool {
 		unexportNfsVolumeContext := make(map[string]string)
 		unexportNfsVolumeContext["csi.requestid"] = pvName
 		unexportNfsVolumeRequest := &proto.UnexportNfsVolumeRequest{
-			VolumeId:           NFSToArrayVolumeID(pv.Spec.CSI.VolumeHandle),
+			VolumeId:           ToArrayVolumeID(pv.Spec.CSI.VolumeHandle),
 			UnexportNfsContext: unexportNfsVolumeContext,
 		}
 		unexportNfsVolumeRequest.UnexportNfsContext[ServiceName] = slice.Name
@@ -151,7 +151,7 @@ func (s *CsiNfsService) reassignVolume(slice *discoveryv1.EndpointSlice) bool {
 	// Unpublish the volume from the node
 	start := time.Now()
 	controllerUnpublishVolumeRequest := &csi.ControllerUnpublishVolumeRequest{
-		VolumeId: NFSToArrayVolumeID(pv.Spec.CSI.VolumeHandle),
+		VolumeId: ToArrayVolumeID(pv.Spec.CSI.VolumeHandle),
 		NodeId:   slice.Labels["nodeID"],
 	}
 	log.Infof("reassignVolume %s calling controllerUnpublishVolume req %v",
@@ -201,7 +201,7 @@ func (s *CsiNfsService) reassignVolume(slice *discoveryv1.EndpointSlice) bool {
 		},
 	}
 	controllerPublishVolumeRequest := &csi.ControllerPublishVolumeRequest{
-		VolumeId:         NFSToArrayVolumeID(pv.Spec.CSI.VolumeHandle),
+		VolumeId:         ToArrayVolumeID(pv.Spec.CSI.VolumeHandle),
 		NodeId:           driverNodeName,
 		VolumeCapability: volumeCapability,
 	}

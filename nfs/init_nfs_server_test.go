@@ -26,7 +26,6 @@ import (
 )
 
 func TestInitializeNfsServer(t *testing.T) {
-
 	tests := []struct {
 		name        string
 		nfsServer   *CsiNfsService
@@ -90,7 +89,6 @@ func TestInitializeNfsServer(t *testing.T) {
 				return &CsiNfsService{
 					executor: mockExecutor,
 				}
-
 			}(),
 			expectedErr: errors.New("error copying nfs.conf"),
 		},
@@ -106,7 +104,6 @@ func TestInitializeNfsServer(t *testing.T) {
 				return &CsiNfsService{
 					executor: mockExecutor,
 				}
-
 			}(),
 			expectedErr: errors.New("error copying nfs.conf"),
 		},
@@ -122,7 +119,6 @@ func TestInitializeNfsServer(t *testing.T) {
 				return &CsiNfsService{
 					executor: mockExecutor,
 				}
-
 			}(),
 			expectedErr: errors.New("error copying nfs.conf"),
 		},
@@ -138,7 +134,6 @@ func TestInitializeNfsServer(t *testing.T) {
 				return &CsiNfsService{
 					executor: mockExecutor,
 				}
-
 			}(),
 			expectedErr: errors.New("error chroot ssh enable"),
 		},
@@ -156,7 +151,6 @@ func TestInitializeNfsServer(t *testing.T) {
 				return &CsiNfsService{
 					executor: mockExecutor,
 				}
-
 			}(),
 			expectedErr: errors.New("error chroot ssh start"),
 		},
@@ -175,7 +169,6 @@ func TestInitializeNfsServer(t *testing.T) {
 				return &CsiNfsService{
 					executor: mockExecutor,
 				}
-
 			}(),
 			expectedErr: errors.New("error chroot ssh status"),
 		},
@@ -195,7 +188,6 @@ func TestInitializeNfsServer(t *testing.T) {
 				return &CsiNfsService{
 					executor: mockExecutor,
 				}
-
 			}(),
 			expectedErr: errors.New("error ssh status nfs-mountd"),
 		},

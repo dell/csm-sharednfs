@@ -33,6 +33,6 @@ func (l *LocalExecutor) ExecuteCommand(name string, args ...string) ([]byte, err
 	return exec.Command(name, args...).CombinedOutput()
 }
 
-func(l *LocalExecutor) ExecuteCommandContext(context context.Context, name string, args ...string) ([]byte, error) {
+func (l *LocalExecutor) ExecuteCommandContext(context context.Context, name string, args ...string) ([]byte, error) {
 	return exec.CommandContext(context, name, args...).Output()
 }

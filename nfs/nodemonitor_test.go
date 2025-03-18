@@ -18,8 +18,11 @@ package nfs
 
 import (
 	"context"
+	"crypto/rand"
+	"math/big"
 	"net"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
@@ -149,6 +152,7 @@ func TestGetNodeExportCounts(t *testing.T) {
 			name: "Success - Test GetNodeExportCounts, empty list",
 			createServer: func(t *testing.T) {
 				server := mocks.NewMockNfsServer(gomock.NewController(t))
+				nodeIPAddress = make(map[string]*NodeStatus)
 				createMockServer(t, localHostIP, server)
 			},
 			want: map[string]int{},
@@ -161,9 +165,9 @@ func TestGetNodeExportCounts(t *testing.T) {
 					Exports: []string{"127.0.0.1:/export1", "127.0.0.1:/export2"},
 				}, nil)
 				createMockServer(t, localHostIP, server)
-				nodeIpToStatus[localHostIP] = &NodeStatus{
+				nodeIPAddress[localHostIP] = &NodeStatus{
 					nodeName: "myNode",
-					nodeIp:   localHostIP,
+					nodeIP:   localHostIP,
 					online:   true,
 					status:   "",
 				}
@@ -178,9 +182,9 @@ func TestGetNodeExportCounts(t *testing.T) {
 					Exports: []string{"127.0.0.1:/export1", "127.0.0.1:/export2"},
 				}, nil)
 				createMockServer(t, localHostIP, server)
-				nodeIpToStatus[localHostIP] = &NodeStatus{
+				nodeIPAddress[localHostIP] = &NodeStatus{
 					nodeName:   "myNode",
-					nodeIp:     localHostIP,
+					nodeIP:     localHostIP,
 					online:     true,
 					status:     "",
 					inRecovery: true,
@@ -219,7 +223,7 @@ func TestPinger(t *testing.T) {
 	}{
 		{
 			name:         "Fail - No address in node",
-			createServer: func(t *testing.T) {},
+			createServer: func(_ *testing.T) {},
 			request: &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "myNode",
@@ -287,7 +291,7 @@ func TestPinger(t *testing.T) {
 			clientset := fake.NewSimpleClientset()
 
 			s := CsiNfsService{
-				k8sclient: &k8s.K8sClient{
+				k8sclient: &k8s.Client{
 					Clientset: clientset,
 				},
 			}
@@ -402,7 +406,7 @@ func TestStartNodeMonitor(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(_ *testing.T) {
 			tt.nfsServer.startNodeMonitor(tt.node)
 		})
 	}
@@ -412,7 +416,7 @@ func TestGetNodeStatus(t *testing.T) {
 	tests := []struct {
 		name       string
 		nfsServer  *CsiNfsService
-		nodeIp     string
+		nodeIP     string
 		wantStatus *NodeStatus
 	}{
 		{
@@ -421,17 +425,17 @@ func TestGetNodeStatus(t *testing.T) {
 				s := &CsiNfsService{}
 				nodeStatus := &NodeStatus{
 					nodeName: "myNode",
-					nodeIp:   "127.0.0.1",
+					nodeIP:   "127.0.0.1",
 				}
 
-				nodeIpToStatus["127.0.0.1"] = nodeStatus
+				nodeIPAddress["127.0.0.1"] = nodeStatus
 
 				return s
 			}(),
-			nodeIp: "127.0.0.1",
+			nodeIP: "127.0.0.1",
 			wantStatus: &NodeStatus{
 				nodeName: "myNode",
-				nodeIp:   "127.0.0.1",
+				nodeIP:   "127.0.0.1",
 			},
 		},
 		{
@@ -440,21 +444,21 @@ func TestGetNodeStatus(t *testing.T) {
 				s := &CsiNfsService{}
 				nodeStatus := &NodeStatus{
 					nodeName: "myNode",
-					nodeIp:   "127.0.0.1",
+					nodeIP:   "127.0.0.1",
 				}
 
-				nodeIpToStatus[nodeStatus.nodeIp] = nodeStatus
+				nodeIPAddress[nodeStatus.nodeIP] = nodeStatus
 
 				return s
 			}(),
-			nodeIp:     "127.0.0.2",
+			nodeIP:     "127.0.0.2",
 			wantStatus: nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			status := tt.nfsServer.GetNodeStatus(tt.nodeIp)
+			status := tt.nfsServer.GetNodeStatus(tt.nodeIP)
 
 			if !reflect.DeepEqual(status, tt.wantStatus) {
 				t.Errorf("GetNodeStatus() = %v, want %v", status, tt.wantStatus)
@@ -464,7 +468,10 @@ func TestGetNodeStatus(t *testing.T) {
 }
 
 func createMockServer(t *testing.T, ip string, mockServer *mocks.MockNfsServer) {
-	lis, err := net.Listen("tcp", ip+":"+nfsServerPort)
+	nBig, _ := rand.Int(rand.Reader, big.NewInt(9000))
+	port := nBig.Int64() + 1000
+	setServerPort(strconv.Itoa(int(port)))
+	lis, err := net.Listen("tcp", ip+":"+getServerPort())
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
 	}
@@ -480,5 +487,4 @@ func createMockServer(t *testing.T, ip string, mockServer *mocks.MockNfsServer) 
 			t.Errorf("Failed to serve: %v", err)
 		}
 	}()
-
 }

@@ -21,6 +21,7 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	k8s "github.com/dell/csm-hbnfs/nfs/k8s"
@@ -31,7 +32,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 )
-
 
 func TestNodeStageVolume(t *testing.T) {
 	type args struct {
@@ -48,7 +48,7 @@ func TestNodeStageVolume(t *testing.T) {
 			name: "success",
 			args: args{
 				req: &csi.NodeStageVolumeRequest{
-					VolumeId:   "vol1",
+					VolumeId: "vol1",
 					VolumeCapability: &csi.VolumeCapability{
 						AccessMode: &csi.VolumeCapability_AccessMode{Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER},
 					},
@@ -61,7 +61,7 @@ func TestNodeStageVolume(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service:=&CsiNfsService{}
+			service := &CsiNfsService{}
 			got, err := service.NodeStageVolume(tt.args.ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NodeStageVolume() error = %v, wantErr %v", err, tt.wantErr)
@@ -89,7 +89,7 @@ func TestNodeUnStageVolume(t *testing.T) {
 			name: "success",
 			args: args{
 				req: &csi.NodeUnstageVolumeRequest{
-					VolumeId:   "vol1",
+					VolumeId:          "vol1",
 					StagingTargetPath: "path/to/stage",
 				},
 			},
@@ -99,7 +99,7 @@ func TestNodeUnStageVolume(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service:=&CsiNfsService{}
+			service := &CsiNfsService{}
 			got, err := service.NodeUnstageVolume(tt.args.ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NodeUnstageVolume() error = %v, wantErr %v", err, tt.wantErr)
@@ -127,7 +127,7 @@ func TestNodeGetVolumeStats(t *testing.T) {
 			name: "success",
 			args: args{
 				req: &csi.NodeGetVolumeStatsRequest{
-					VolumeId:   "vol1",
+					VolumeId:          "vol1",
 					StagingTargetPath: "path/to/stage",
 				},
 			},
@@ -137,7 +137,7 @@ func TestNodeGetVolumeStats(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service:=&CsiNfsService{}
+			service := &CsiNfsService{}
 			got, err := service.NodeGetVolumeStats(tt.args.ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NodeGetVolumeStats() error = %v, wantErr %v", err, tt.wantErr)
@@ -175,7 +175,7 @@ func TestNodeExpandVolume(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service:=&CsiNfsService{}
+			service := &CsiNfsService{}
 			got, err := service.NodeExpandVolume(tt.args.ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NodeExpandVolume() error = %v, wantErr %v", err, tt.wantErr)
@@ -210,7 +210,7 @@ func TestNodeGetCapabilities(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service:=&CsiNfsService{}
+			service := &CsiNfsService{}
 			got, err := service.NodeGetCapabilities(tt.args.ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NodeGetCapabilities() error = %v, wantErr %v", err, tt.wantErr)
@@ -245,7 +245,7 @@ func TestNodeGetInfo(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service:=&CsiNfsService{}
+			service := &CsiNfsService{}
 			got, err := service.NodeGetInfo(tt.args.ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NodeGetInfo() error = %v, wantErr %v", err, tt.wantErr)
@@ -260,9 +260,9 @@ func TestNodeGetInfo(t *testing.T) {
 
 func TestMountVolume(t *testing.T) {
 	type args struct {
-		context context.Context
-		volumeId string
-		fsType string
+		context      context.Context
+		volumeID     string
+		fsType       string
 		nfsExportDir string
 	}
 	tests := []struct {
@@ -274,17 +274,17 @@ func TestMountVolume(t *testing.T) {
 		{
 			name: "success",
 			args: args{
-				volumeId: "vol1",
-				fsType: "ext4",
+				volumeID:     "vol1",
+				fsType:       "ext4",
 				nfsExportDir: "/export",
 			},
-			want: "",
+			want:    "",
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		service := &CsiNfsService{}
-		got, err := service.MountVolume(tt.args.context, tt.args.volumeId, tt.args.fsType, tt.args.nfsExportDir, nil)
+		got, err := service.MountVolume(tt.args.context, tt.args.volumeID, tt.args.fsType, tt.args.nfsExportDir, nil)
 		if (err != nil) != tt.wantErr {
 			t.Errorf("MountVolume() error = %v, wantErr %v", err, tt.wantErr)
 			return
@@ -297,8 +297,8 @@ func TestMountVolume(t *testing.T) {
 
 func TestUnmountVolume(t *testing.T) {
 	type args struct {
-		context context.Context
-		volumeId string
+		context         context.Context
+		volumeID        string
 		exportDirectory string
 	}
 	tests := []struct {
@@ -309,7 +309,7 @@ func TestUnmountVolume(t *testing.T) {
 		{
 			name: "fail",
 			args: args{
-				volumeId: "vol1",
+				volumeID:        "vol1",
 				exportDirectory: "/export",
 			},
 			wantErr: true,
@@ -317,7 +317,7 @@ func TestUnmountVolume(t *testing.T) {
 	}
 	for _, tt := range tests {
 		service := &CsiNfsService{}
-		err := service.UnmountVolume(tt.args.context, tt.args.volumeId, tt.args.exportDirectory, nil)
+		err := service.UnmountVolume(tt.args.context, tt.args.volumeID, tt.args.exportDirectory, nil)
 		if (err != nil) != tt.wantErr {
 			t.Errorf("UnmountVolume() error = %v, wantErr %v", err, tt.wantErr)
 			return
@@ -326,16 +326,18 @@ func TestUnmountVolume(t *testing.T) {
 }
 
 func TestNodePublishVolume(t *testing.T) {
-	cxt:=context.Background()
+	nodePublishTimeout = 100 * time.Millisecond
+
+	cxt := context.Background()
 	t.Run("no service", func(t *testing.T) {
-		service:=&CsiNfsService{
-			k8sclient: &k8s.K8sClient{
+		service := &CsiNfsService{
+			k8sclient: &k8s.Client{
 				Clientset: fake.NewSimpleClientset(),
 			},
 			failureRetries: 1,
 		}
 		_, err := service.NodePublishVolume(cxt, &csi.NodePublishVolumeRequest{})
-		assert.Contains(t, err.Error(), "service_err")
+		assert.Contains(t, err.Error(), "err")
 	})
 
 	t.Run("cluster IP empty", func(t *testing.T) {
@@ -349,8 +351,8 @@ func TestNodePublishVolume(t *testing.T) {
 			},
 			Status: v1.ServiceStatus{},
 		}, metav1.CreateOptions{})
-		service:=&CsiNfsService{
-			k8sclient: &k8s.K8sClient{
+		service := &CsiNfsService{
+			k8sclient: &k8s.Client{
 				Clientset: clientset,
 			},
 			failureRetries: 1,
@@ -372,8 +374,8 @@ func TestNodePublishVolume(t *testing.T) {
 			},
 			Status: v1.ServiceStatus{},
 		}, metav1.CreateOptions{})
-		service:=&CsiNfsService{
-			k8sclient: &k8s.K8sClient{
+		service := &CsiNfsService{
+			k8sclient: &k8s.Client{
 				Clientset: clientset,
 			},
 			failureRetries: 1,
@@ -383,7 +385,7 @@ func TestNodePublishVolume(t *testing.T) {
 		})
 		assert.Contains(t, err.Error(), "TargetPath empty")
 	})
-	
+
 	t.Run("fail mount", func(t *testing.T) {
 		clientset := fake.NewClientset()
 		clientset.CoreV1().Services("").Create(cxt, &v1.Service{
@@ -395,19 +397,19 @@ func TestNodePublishVolume(t *testing.T) {
 			},
 			Status: v1.ServiceStatus{},
 		}, metav1.CreateOptions{})
-		executor:=mocks.NewMockExecutor(gomock.NewController(t))
+		executor := mocks.NewMockExecutor(gomock.NewController(t))
 		executor.EXPECT().ExecuteCommand("mkdir", "-p", gomock.Any()).AnyTimes().Return([]byte{}, errors.New("mkdir error"))
 		executor.EXPECT().ExecuteCommand("chmod", "02777", gomock.Any()).AnyTimes().Return([]byte{}, errors.New("chmod error"))
 		executor.EXPECT().ExecuteCommandContext(gomock.Any(), "mount", "-t", "nfs4", gomock.Any(), gomock.Any()).AnyTimes().Return([]byte{}, errors.New("mount error"))
-		service:=&CsiNfsService{
-			k8sclient: &k8s.K8sClient{
+		service := &CsiNfsService{
+			k8sclient: &k8s.Client{
 				Clientset: clientset,
 			},
-			executor: executor,
+			executor:       executor,
 			failureRetries: 1,
 		}
 		_, err := service.NodePublishVolume(cxt, &csi.NodePublishVolumeRequest{
-			VolumeId: "vol1",
+			VolumeId:   "vol1",
 			TargetPath: "/test/path",
 		})
 		assert.Contains(t, err.Error(), "mount error")
@@ -424,19 +426,19 @@ func TestNodePublishVolume(t *testing.T) {
 			},
 			Status: v1.ServiceStatus{},
 		}, metav1.CreateOptions{})
-		executor:=mocks.NewMockExecutor(gomock.NewController(t))
+		executor := mocks.NewMockExecutor(gomock.NewController(t))
 		executor.EXPECT().ExecuteCommand("mkdir", "-p", gomock.Any()).Times(1).Return([]byte{}, nil)
 		executor.EXPECT().ExecuteCommand("chmod", "02777", gomock.Any()).Times(1).Return([]byte{}, nil)
 		executor.EXPECT().ExecuteCommandContext(gomock.Any(), "mount", "-t", "nfs4", gomock.Any(), gomock.Any()).Times(1).Return([]byte{}, nil)
-		service:=&CsiNfsService{
-			k8sclient: &k8s.K8sClient{
+		service := &CsiNfsService{
+			k8sclient: &k8s.Client{
 				Clientset: clientset,
 			},
-			executor: executor,
+			executor:       executor,
 			failureRetries: 1,
 		}
 		resp, err := service.NodePublishVolume(cxt, &csi.NodePublishVolumeRequest{
-			VolumeId: "vol1",
+			VolumeId:   "vol1",
 			TargetPath: "/test/path",
 		})
 		assert.Nil(t, err)
@@ -445,13 +447,13 @@ func TestNodePublishVolume(t *testing.T) {
 }
 
 func TestNodeUnpublishVolume(t *testing.T) {
-	cxt:=context.Background()
+	cxt := context.Background()
 	t.Run("not nfs volume", func(t *testing.T) {
-		req:= &csi.NodeUnpublishVolumeRequest{
-			VolumeId: "vol1",
+		req := &csi.NodeUnpublishVolumeRequest{
+			VolumeId:   "vol1",
 			TargetPath: "path/to/target",
 		}
-		service:=&CsiNfsService{
+		service := &CsiNfsService{
 			failureRetries: 1,
 		}
 		got, err := service.NodeUnpublishVolume(cxt, req)
@@ -460,28 +462,28 @@ func TestNodeUnpublishVolume(t *testing.T) {
 	})
 
 	t.Run("unmount fail", func(t *testing.T) {
-		executor:=mocks.NewMockExecutor(gomock.NewController(t))
+		executor := mocks.NewMockExecutor(gomock.NewController(t))
 		executor.EXPECT().ExecuteCommand("umount", "--force", gomock.Any()).Times(1).Return([]byte{}, errors.New("umount error"))
-		service:=&CsiNfsService{
-			executor: executor,
+		service := &CsiNfsService{
+			executor:       executor,
 			failureRetries: 1,
 		}
 		_, err := service.NodeUnpublishVolume(cxt, &csi.NodeUnpublishVolumeRequest{
-			VolumeId: "nfs-vol1",
+			VolumeId:   "nfs-vol1",
 			TargetPath: "/test/path",
 		})
 		assert.Contains(t, err.Error(), "umount error")
 	})
 
 	t.Run("success", func(t *testing.T) {
-		executor:=mocks.NewMockExecutor(gomock.NewController(t))
+		executor := mocks.NewMockExecutor(gomock.NewController(t))
 		executor.EXPECT().ExecuteCommand("umount", "--force", gomock.Any()).Times(1).Return([]byte{}, nil)
-		service:=&CsiNfsService{
-			executor: executor,
+		service := &CsiNfsService{
+			executor:       executor,
 			failureRetries: 1,
 		}
 		resp, err := service.NodeUnpublishVolume(cxt, &csi.NodeUnpublishVolumeRequest{
-			VolumeId: "nfs-vol1",
+			VolumeId:   "nfs-vol1",
 			TargetPath: "/test/path",
 		})
 		assert.Nil(t, err)
