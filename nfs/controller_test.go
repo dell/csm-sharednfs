@@ -31,6 +31,8 @@ import (
 	"github.com/dell/csm-hbnfs/nfs/proto"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	v1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -325,6 +327,259 @@ func TestControllerPublishVolume(t *testing.T) {
 			},
 			expectedErr: nil,
 		},
+		{
+			name: "could not find node",
+			createServer: func(t *testing.T) {
+				server := mocks.NewMockNfsServer(gomock.NewController(t))
+				server.EXPECT().ExportNfsVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&proto.ExportNfsVolumeResponse{}, nil)
+				createMockServer(t, "127.0.0.1", server)
+				nodeIpToStatus["127.0.0.1"] = &NodeStatus{
+					online:     true,
+					inRecovery: false,
+				}
+			},
+			csiNfsService: func() *CsiNfsService {
+				mockService := mocks.NewMockService(gomock.NewController(t))
+				mockService.EXPECT().ControllerPublishVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&csi.ControllerPublishVolumeResponse{
+					PublishContext: map[string]string{
+						"csi-nfs": "test-node",
+					},
+				}, nil)
+				fakeK8sClient := fake.NewSimpleClientset()
+
+				fakeK8sClient.AddReactor("get", "services", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, nil
+				})
+
+				fakeK8sClient.AddReactor("get", "endpointslices", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, nil
+				})
+
+				fakeK8sClient.PrependReactor("list", "nodes", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, nil
+				})
+
+				csiNfsServce := &CsiNfsService{
+					vcsi: mockService,
+					k8sclient: &k8s.K8sClient{
+						Clientset: fakeK8sClient,
+					},
+					waitCreateNfsServiceInterval: 10 * time.Millisecond,
+				}
+				return csiNfsServce
+			}(),
+			req: &csi.ControllerPublishVolumeRequest{
+				VolumeId: "test-volume",
+				NodeId:   "csi-node-123-127.0.0.1",
+				VolumeCapability: &csi.VolumeCapability{
+					AccessType: &csi.VolumeCapability_Block{
+						Block: &csi.VolumeCapability_BlockVolume{},
+					},
+					AccessMode: &csi.VolumeCapability_AccessMode{
+						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
+					},
+				},
+				VolumeContext: map[string]string{
+					"Name": "volume-name",
+				},
+			},
+			expectedRes: nil,
+			expectedErr: status.Errorf(codes.Internal, "could not retrieve Node"),
+		},
+		{
+			name: "Publish volume request when endpoint exists",
+			createServer: func(t *testing.T) {
+				server := mocks.NewMockNfsServer(gomock.NewController(t))
+				server.EXPECT().ExportNfsVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&proto.ExportNfsVolumeResponse{}, nil)
+				createMockServer(t, "127.0.0.1", server)
+				nodeIpToStatus["127.0.0.1"] = &NodeStatus{
+					online:     true,
+					inRecovery: false,
+				}
+			},
+			csiNfsService: func() *CsiNfsService {
+				mockService := mocks.NewMockService(gomock.NewController(t))
+				mockService.EXPECT().ControllerPublishVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&csi.ControllerPublishVolumeResponse{
+					PublishContext: map[string]string{
+						"csi-nfs": "test-node",
+					},
+				}, nil)
+				fakeK8sClient := fake.NewSimpleClientset()
+
+				fakeK8sClient.AddReactor("get", "services", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, nil
+				})
+
+				fakeK8sClient.AddReactor("get", "endpointslices", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, &discoveryv1.EndpointSlice{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "test-volume",
+								Namespace: "nfs",
+							},
+							Endpoints: []discoveryv1.Endpoint{
+								{
+									Addresses: []string{"127.0.0.1"},
+								},
+							},
+						},
+						nil
+				})
+
+				fakeK8sClient.PrependReactor("list", "nodes", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, &v1.NodeList{
+						Items: []v1.Node{
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "worker-node-1",
+									Annotations: map[string]string{
+										"csi.volume.kubernetes.io/nodeid": "{\"csi-powerstore.dellemc.com\":\"csi-node-123-127.0.0.1\"}",
+									},
+								},
+								Status: v1.NodeStatus{
+									Addresses: []v1.NodeAddress{
+										{
+											Address: "127.0.0.1",
+										},
+									},
+								},
+							},
+						},
+					}, nil
+				})
+
+				csiNfsServce := &CsiNfsService{
+					vcsi: mockService,
+					k8sclient: &k8s.K8sClient{
+						Clientset: fakeK8sClient,
+					},
+					waitCreateNfsServiceInterval: 10 * time.Millisecond,
+				}
+				return csiNfsServce
+			}(),
+			req: &csi.ControllerPublishVolumeRequest{
+				VolumeId: "test-volume",
+				NodeId:   "csi-node-123-127.0.0.1",
+				VolumeCapability: &csi.VolumeCapability{
+					AccessType: &csi.VolumeCapability_Block{
+						Block: &csi.VolumeCapability_BlockVolume{},
+					},
+					AccessMode: &csi.VolumeCapability_AccessMode{
+						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
+					},
+				},
+				VolumeContext: map[string]string{
+					"Name": "volume-name",
+				},
+			},
+			expectedRes: &csi.ControllerPublishVolumeResponse{
+				PublishContext: map[string]string{
+					"name": "volume-name",
+					"nfs":  "test-volume",
+				},
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "Publish volume request when endpoint and service exists",
+			createServer: func(t *testing.T) {
+				server := mocks.NewMockNfsServer(gomock.NewController(t))
+				server.EXPECT().ExportNfsVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&proto.ExportNfsVolumeResponse{}, nil)
+				createMockServer(t, "127.0.0.1", server)
+				nodeIpToStatus["127.0.0.1"] = &NodeStatus{
+					online:     true,
+					inRecovery: false,
+				}
+			},
+			csiNfsService: func() *CsiNfsService {
+				mockService := mocks.NewMockService(gomock.NewController(t))
+				mockService.EXPECT().ControllerPublishVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&csi.ControllerPublishVolumeResponse{
+					PublishContext: map[string]string{
+						"csi-nfs": "test-node",
+					},
+				}, nil)
+				fakeK8sClient := fake.NewSimpleClientset()
+
+				fakeK8sClient.AddReactor("get", "services", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, &v1.Service{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "test-volume",
+							Namespace: "nfs",
+							Labels: map[string]string{
+								"client/" + "csi-node-123-127.0.0.1": "csi-node-123-127.0.0.1",
+							},
+						},
+					}, nil
+				})
+
+				fakeK8sClient.AddReactor("get", "endpointslice", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, &discoveryv1.EndpointSlice{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "test-volume",
+								Namespace: "nfs",
+							},
+							Endpoints: []discoveryv1.Endpoint{
+								{
+									Addresses: []string{"127.0.0.1"},
+								},
+							},
+						},
+						nil
+				})
+
+				fakeK8sClient.PrependReactor("list", "nodes", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, &v1.NodeList{
+						Items: []v1.Node{
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "worker-node-1",
+									Annotations: map[string]string{
+										"csi.volume.kubernetes.io/nodeid": "{\"csi-powerstore.dellemc.com\":\"csi-node-123-127.0.0.1\"}",
+									},
+								},
+								Status: v1.NodeStatus{
+									Addresses: []v1.NodeAddress{
+										{
+											Address: "127.0.0.1",
+										},
+									},
+								},
+							},
+						},
+					}, nil
+				})
+
+				csiNfsServce := &CsiNfsService{
+					vcsi: mockService,
+					k8sclient: &k8s.K8sClient{
+						Clientset: fakeK8sClient,
+					},
+					waitCreateNfsServiceInterval: 10 * time.Millisecond,
+				}
+				return csiNfsServce
+			}(),
+			req: &csi.ControllerPublishVolumeRequest{
+				VolumeId: "test-volume",
+				NodeId:   "csi-node-123-127.0.0.1",
+				VolumeCapability: &csi.VolumeCapability{
+					AccessType: &csi.VolumeCapability_Block{
+						Block: &csi.VolumeCapability_BlockVolume{},
+					},
+					AccessMode: &csi.VolumeCapability_AccessMode{
+						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
+					},
+				},
+				VolumeContext: map[string]string{
+					"Name": "volume-name",
+				},
+			},
+			expectedRes: &csi.ControllerPublishVolumeResponse{
+				PublishContext: map[string]string{
+					"name": "volume-name",
+					"nfs":  "test-volume",
+				},
+			},
+			expectedErr: nil,
+		},
 	}
 
 	for _, test := range tests {
@@ -341,7 +596,12 @@ func TestControllerPublishVolume(t *testing.T) {
 			if !reflect.DeepEqual(resp, test.expectedRes) {
 				t.Errorf("expected response %+v, got %+v", test.expectedRes, resp)
 			}
-			assert.Equal(t, test.expectedErr, err)
+			if test.expectedErr != nil {
+				assert.Contains(t, err.Error(), test.expectedErr.Error())
+			} else {
+				assert.Equal(t, test.expectedErr, err)
+			}
+
 		})
 	}
 }
@@ -428,4 +688,93 @@ func TestControllerUnpublishVolume(t *testing.T) {
 		_, err := csiNfsServce.ControllerUnpublishVolume(ctx, &req)
 		assert.Contains(t, err.Error(), "endpointslice apparaently had no IP addresses")
 	})
+
+	t.Run("remove last client", func(t *testing.T) {
+
+		ctx := context.Background()
+		fakeK8sClient := fake.NewClientset()
+		fakeK8sClient.DiscoveryV1().EndpointSlices("").Create(ctx, &discoveryv1.EndpointSlice{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-volume",
+			},
+			Endpoints: []discoveryv1.Endpoint{
+				{
+					Addresses: []string{"127.0.0.1"},
+				},
+			},
+		}, metav1.CreateOptions{})
+		fakeK8sClient.CoreV1().Services("").Create(ctx, &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-volume",
+				Labels: map[string]string{
+					"client/" + "test-node": "test-node",
+				},
+			},
+		}, metav1.CreateOptions{})
+		mockNfsServer := mocks.NewMockNfsServer(gomock.NewController(t))
+		mockNfsServer.EXPECT().UnexportNfsVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&proto.UnexportNfsVolumeResponse{}, nil)
+
+		mockVcsiService := mocks.NewMockService(gomock.NewController(t))
+		mockVcsiService.EXPECT().ControllerUnpublishVolume(gomock.Any(), gomock.Any()).Times(1).Return(&csi.ControllerUnpublishVolumeResponse{}, nil)
+
+		createMockServer(t, "127.0.0.1", mockNfsServer)
+		csiNfsServce := &CsiNfsService{
+			vcsi: mockVcsiService,
+			k8sclient: &k8s.K8sClient{
+				Clientset: fakeK8sClient,
+			},
+		}
+
+		req := csi.ControllerUnpublishVolumeRequest{
+			VolumeId: "test-volume",
+			NodeId:   "test-node",
+		}
+
+		_, err := csiNfsServce.ControllerUnpublishVolume(ctx, &req)
+		assert.Equal(t, nil, err)
+	})
+
+	t.Run("remove non-last client", func(t *testing.T) {
+		ctx := context.Background()
+		fakeK8sClient := fake.NewClientset()
+		fakeK8sClient.DiscoveryV1().EndpointSlices("").Create(ctx, &discoveryv1.EndpointSlice{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-volume",
+			},
+			Endpoints: []discoveryv1.Endpoint{
+				{
+					Addresses: []string{"127.0.0.1"},
+				},
+			},
+		}, metav1.CreateOptions{})
+		fakeK8sClient.CoreV1().Services("").Create(ctx, &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-volume",
+				Labels: map[string]string{
+					"client/" + "test-node":  "test-node",
+					"client/" + "test-node2": "test-node2",
+				},
+			},
+		}, metav1.CreateOptions{})
+		mockServer := mocks.NewMockNfsServer(gomock.NewController(t))
+		mockServer.EXPECT().UnexportNfsVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&proto.UnexportNfsVolumeResponse{}, nil)
+		createMockServer(t, "127.0.0.1", mockServer)
+		mockVcsiService := mocks.NewMockService(gomock.NewController(t))
+		mockVcsiService.EXPECT().ControllerUnpublishVolume(gomock.Any(), gomock.Any()).Times(0).Return(&csi.ControllerUnpublishVolumeResponse{}, nil)
+		csiNfsServce := &CsiNfsService{
+			vcsi: mockVcsiService,
+			k8sclient: &k8s.K8sClient{
+				Clientset: fakeK8sClient,
+			},
+		}
+
+		req := csi.ControllerUnpublishVolumeRequest{
+			VolumeId: "test-volume",
+			NodeId:   "test-node",
+		}
+
+		_, err := csiNfsServce.ControllerUnpublishVolume(ctx, &req)
+		assert.Equal(t, nil, err)
+	})
+
 }
