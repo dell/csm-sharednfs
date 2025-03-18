@@ -38,6 +38,9 @@ var (
 	savedUpdates     int64 // the number of saved updates
 	retrySleep       = 10 * time.Second
 	waitTime         = 30 * time.Second
+	exportsDir       = "/noderoot/etc/"
+	exportsFile      = "exports"
+	pathToExports    = exportsDir + exportsFile
 )
 
 const (
@@ -58,9 +61,9 @@ func CheckExport(directory string) (bool, error) {
 }
 
 func checkExport(directory string) (bool, error) {
-	file, err := os.Open("/noderoot/etc/exports")
+	file, err := os.Open(pathToExports)
 	if err != nil {
-		return false, fmt.Errorf("failed to open /noderoot/etc/exports: %v", err)
+		return false, fmt.Errorf("failed to open %s: %v", pathToExports, err)
 	}
 	defer file.Close()
 
@@ -73,7 +76,7 @@ func checkExport(directory string) (bool, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return false, fmt.Errorf("error reading /noderoot/etc/exports: %v", err)
+		return false, fmt.Errorf("error reading %s: %v", exportsDir, err)
 	}
 
 	return false, nil
@@ -83,9 +86,9 @@ func checkExport(directory string) (bool, error) {
 func GetExport(directory string) (string, error) {
 	exportsLock.Lock()
 	defer exportsLock.Unlock()
-	file, err := os.Open("/noderoot/etc/exports")
+	file, err := os.Open(pathToExports)
 	if err != nil {
-		return "", fmt.Errorf("failed to open /noderoot/etc/exports: %v", err)
+		return "", fmt.Errorf("failed to open %s: %v", exportsDir, err)
 	}
 	defer file.Close()
 
@@ -98,7 +101,7 @@ func GetExport(directory string) (string, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return "", fmt.Errorf("error reading /noderoot/etc/exports: %v", err)
+		return "", fmt.Errorf("error reading %s: %v", exportsDir, err)
 	}
 
 	return "", fmt.Errorf("no export entry found for %s", directory)
@@ -109,7 +112,7 @@ func GetExports(prefix string) ([]string, error) {
 	exportsLock.Lock()
 	defer exportsLock.Unlock()
 
-	file, err := os.Open("/noderoot/etc/exports")
+	file, err := os.Open(pathToExports)
 	if err != nil {
 		return nil, err
 	}
@@ -145,15 +148,15 @@ func AddExport(directory, options string) (int64, error) {
 		return generation, fmt.Errorf("export entry for %s already exists", directory)
 	}
 
-	file, err := os.OpenFile("/noderoot/etc/exports", os.O_APPEND|os.O_WRONLY, 0o644)
+	file, err := os.OpenFile(pathToExports, os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
-		return generation, fmt.Errorf("failed to open /noderoot/etc/exports: %v", err)
+		return generation, fmt.Errorf("failed to open %s: %v", exportsDir, err)
 	}
 	defer file.Close()
 
 	entry := fmt.Sprintf("%s %s\n", directory, options)
 	if _, err := file.WriteString(entry); err != nil {
-		return generation, fmt.Errorf("failed to write to /noderoot/etc/exports: %v", err)
+		return generation, fmt.Errorf("failed to write to %s: %v", exportsDir, err)
 	}
 	log.Infof("AddExport %s %s completed", directory, options)
 	generation = generation + 1
@@ -164,9 +167,9 @@ func AddExport(directory, options string) (int64, error) {
 func DeleteExport(directory string) (int64, error) {
 	exportsLock.Lock()
 	defer exportsLock.Unlock()
-	file1, err := os.Open("/noderoot/etc/exports")
+	file1, err := os.Open(pathToExports)
 	if err != nil {
-		return generation, fmt.Errorf("failed to open /noderoot/etc/exports: %v", err)
+		return generation, fmt.Errorf("failed to open %s: %v", exportsDir, err)
 	}
 
 	var lines []string
@@ -180,19 +183,19 @@ func DeleteExport(directory string) (int64, error) {
 
 	if err := scanner.Err(); err != nil {
 		file1.Close()
-		return generation, fmt.Errorf("error reading /noderoot/etc/exports: %v", err)
+		return generation, fmt.Errorf("error reading %s: %v", exportsDir, err)
 	}
 	file1.Close()
 
-	file2, err := os.OpenFile("/noderoot/etc/exports", os.O_TRUNC|os.O_WRONLY, 0o644)
+	file2, err := os.OpenFile(pathToExports, os.O_TRUNC|os.O_WRONLY, 0o644)
 	if err != nil {
-		return generation, fmt.Errorf("failed to open /noderoot/etc/exports: %v", err)
+		return generation, fmt.Errorf("failed to open %s: %v", exportsDir, err)
 	}
 
 	for _, line := range lines {
 		if _, err := file2.WriteString(line + "\n"); err != nil {
 			file2.Close()
-			return generation, fmt.Errorf("failed to write to /noderoot/etc/exports: %v", err)
+			return generation, fmt.Errorf("failed to write to %s: %v", exportsDir, err)
 		}
 	}
 	file2.Close()
@@ -357,7 +360,7 @@ func ResyncNFSMountd(generation int64) error {
 		output, err = GetLocalExecutor().ExecuteCommand(chroot, noderoot, exportfs, "-r", "-a")
 		if err == nil {
 			syncedGeneration = generation
-			log.Infof("resyncing to /noderoot/etc/exports successful %d", generation)
+			log.Infof("resyncing to %s successful %d", exportsDir, generation)
 			return nil
 		}
 		log.Infof("failed resyncing nfs-mountd: %v, retries: %d, output: %s", err, retries, string(output))

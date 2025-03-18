@@ -33,6 +33,9 @@ import (
 var bufioMutex sync.Mutex
 
 func TestCheckExport(t *testing.T) {
+	exportsDir = "/tmp/noderoot/etc/"
+	exportsFile = "exports"
+	pathToExports = exportsDir + exportsFile
 	defaultGetBufioScanner := GetBufioScanner
 	tests := []struct {
 		name      string
@@ -46,8 +49,8 @@ func TestCheckExport(t *testing.T) {
 	}{
 		{
 			name:      "directory exists in /noderoot/etc/exports",
-			directory: "/noderoot/etc/",
-			fileName:  "exports",
+			directory: exportsDir,
+			fileName:  exportsFile,
 			setup: func(dir string, fileName string) (*os.File, error) {
 				err := os.MkdirAll(dir, 0o755)
 				if err != nil {
@@ -86,7 +89,7 @@ func TestCheckExport(t *testing.T) {
 		{
 			name:      "error opening /noderoot/etc/exports",
 			directory: "/error/directory",
-			fileName:  "exports",
+			fileName:  exportsFile,
 			setup: func(dir string, fileName string) (*os.File, error) {
 				return nil, nil
 			},
@@ -98,8 +101,8 @@ func TestCheckExport(t *testing.T) {
 		},
 		{
 			name:      "bufio scanner error reading /noderoot/etc/exports",
-			directory: "/noderoot/etc/",
-			fileName:  "exports",
+			directory: exportsDir,
+			fileName:  exportsFile,
 			setup: func(dir string, fileName string) (*os.File, error) {
 				err := os.MkdirAll(dir, 0o755)
 				if err != nil {
@@ -108,7 +111,7 @@ func TestCheckExport(t *testing.T) {
 				}
 
 				// Create a mock /noderoot/etc/exports file
-				file, err := os.Create(dir + fileName)
+				file, err := os.Create(pathToExports)
 				if err != nil {
 					t.Errorf("failed to create temp file: %v", err)
 					return nil, errors.New("failed to create temp directory")
@@ -165,6 +168,9 @@ func TestCheckExport(t *testing.T) {
 }
 
 func TestGetExport(t *testing.T) {
+	exportsDir = "/tmp/noderoot/etc/"
+	exportsFile = "exports"
+	pathToExports = exportsDir + exportsFile
 	defaultGetBufioScanner := GetBufioScanner
 	tests := []struct {
 		name      string
@@ -178,8 +184,8 @@ func TestGetExport(t *testing.T) {
 	}{
 		{
 			name:      "directory exists in /noderoot/etc/exports",
-			directory: "/noderoot/etc/",
-			fileName:  "exports",
+			directory: exportsDir,
+			fileName:  exportsFile,
 			setup: func(dir string, fileName string) (*os.File, error) {
 				err := os.MkdirAll(dir, 0o755)
 				if err != nil {
@@ -230,8 +236,8 @@ func TestGetExport(t *testing.T) {
 		},
 		{
 			name:      "scanner error reading /noderoot/etc/exports",
-			directory: "/noderoot/etc/",
-			fileName:  "exports",
+			directory: exportsDir,
+			fileName:  exportsFile,
 			setup: func(dir string, fileName string) (*os.File, error) {
 				err := os.MkdirAll(dir, 0o755)
 				if err != nil {
@@ -294,6 +300,9 @@ func TestGetExport(t *testing.T) {
 }
 
 func TestGetNFSExports(t *testing.T) {
+	exportsDir = "/tmp/noderoot/etc/"
+	exportsFile = "exports"
+	pathToExports = exportsDir + exportsFile
 	defaultGetBufioScanner := GetBufioScanner
 	tests := []struct {
 		name      string
@@ -307,8 +316,8 @@ func TestGetNFSExports(t *testing.T) {
 	}{
 		{
 			name:      "directory exists in /noderoot/etc/exports",
-			directory: "/noderoot/etc/",
-			fileName:  "exports",
+			directory: exportsDir,
+			fileName:  exportsFile,
 			setup: func(dir string, fileName string) (*os.File, error) {
 				err := os.MkdirAll(dir, 0o755)
 				if err != nil {
@@ -359,8 +368,8 @@ func TestGetNFSExports(t *testing.T) {
 		},
 		{
 			name:      "scanner error reading /noderoot/etc/exports",
-			directory: "/noderoot/etc/",
-			fileName:  "exports",
+			directory: exportsDir,
+			fileName:  exportsFile,
 			setup: func(dir string, fileName string) (*os.File, error) {
 				err := os.MkdirAll(dir, 0o755)
 				if err != nil {
@@ -428,6 +437,9 @@ func TestGetNFSExports(t *testing.T) {
 
 func TestAddExport(t *testing.T) {
 	defaultGetBufioScanner := GetBufioScanner
+	exportsDir = "/tmp/noderoot/etc/"
+	exportsFile = "exports"
+	pathToExports = exportsDir + exportsFile
 	tests := []struct {
 		name      string
 		setup     func(dir string, fileName string) (*os.File, error)
@@ -440,8 +452,8 @@ func TestAddExport(t *testing.T) {
 	}{
 		{
 			name:      "export does not exist in /noderoot/etc/exports",
-			directory: "/noderoot/etc/",
-			fileName:  "exports",
+			directory: exportsDir,
+			fileName:  exportsFile,
 			setup: func(dir string, fileName string) (*os.File, error) {
 				err := os.MkdirAll(dir, 0o755)
 				if err != nil {
@@ -470,8 +482,8 @@ func TestAddExport(t *testing.T) {
 		},
 		{
 			name:      "export exist in /noderoot/etc/exports",
-			directory: "/noderoot/etc/",
-			fileName:  "exports",
+			directory: exportsDir,
+			fileName:  exportsFile,
 			setup: func(dir string, fileName string) (*os.File, error) {
 				err := os.MkdirAll(dir, 0o755)
 				if err != nil {
@@ -629,6 +641,9 @@ func TestResyncNFSMountd(t *testing.T) {
 
 func TestDeleteExport(t *testing.T) {
 	defaultGetBufioScanner := GetBufioScanner
+	exportsDir = "/tmp/noderoot/etc/"
+	exportsFile = "exports"
+	pathToExports = exportsDir + exportsFile
 	tests := []struct {
 		name      string
 		setup     func(dir string, fileName string) (*os.File, error)
@@ -641,8 +656,8 @@ func TestDeleteExport(t *testing.T) {
 	}{
 		{
 			name:      "export exists in /noderoot/etc/exports",
-			directory: "/noderoot/etc/",
-			fileName:  "exports",
+			directory: exportsDir,
+			fileName:  exportsFile,
 			setup: func(dir string, fileName string) (*os.File, error) {
 				err := os.MkdirAll(dir, 0o755)
 				if err != nil {
@@ -684,8 +699,8 @@ func TestDeleteExport(t *testing.T) {
 		},
 		{
 			name:      "error opening /noderoot/etc/exports",
-			directory: "/noderoot/etc/exports",
-			fileName:  "exports",
+			directory: exportsDir,
+			fileName:  exportsFile,
 			setup: func(dir string, fileName string) (*os.File, error) {
 				return nil, nil
 			},

@@ -602,6 +602,7 @@ func TestGetNodeByCSINodeId(t *testing.T) {
 		name      string
 		driverKey string
 		csiNodeId string
+		node      *v1.Node
 		wantNode  *v1.Node
 		wantErr   bool
 	}{
@@ -617,14 +618,45 @@ func TestGetNodeByCSINodeId(t *testing.T) {
 					},
 				},
 			},
+			node: &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node1",
+					Annotations: map[string]string{
+						"csi.volume.kubernetes.io/nodeid": "{\"csi-powerstore.dellemc.com\": \"csi-node-e8d45b5d10cc4f79953ba100c7fff4cb-10.20.30.40\",\"csi-vxflexos.dellemc.com\": \"638AD887-6FC4-4A8E-B3D1-DE4A9023BE3B\"}",
+					},
+				},
+			},
 			wantErr: false,
+		},
+		{
+			name:      "bad json retrieval",
+			driverKey: "csi.volume.kubernetes.io/nodeid",
+			csiNodeId: "csi-node-e8d45b5d10cc4f79953ba100c7fff4cb-10.20.30.40",
+			node: &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node1",
+					Annotations: map[string]string{
+						"csi.volume.kubernetes.io/nodeid": "{ invalid: 123",
+					},
+				},
+			},
+			wantNode: nil,
+			wantErr:  true,
 		},
 		{
 			name:      "error retrieving nodes",
 			driverKey: "csi.volume.kubernetes.io/nodeid",
 			csiNodeId: "node2",
-			wantNode:  nil,
-			wantErr:   true,
+			node: &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node1",
+					Annotations: map[string]string{
+						"csi.volume.kubernetes.io/nodeid": "node1",
+					},
+				},
+			},
+			wantNode: nil,
+			wantErr:  true,
 		},
 	}
 
@@ -638,8 +670,8 @@ func TestGetNodeByCSINodeId(t *testing.T) {
 				Clientset: clientset,
 			}
 
-			if tt.wantNode != nil {
-				_, err := clientset.CoreV1().Nodes().Create(context.Background(), tt.wantNode, metav1.CreateOptions{})
+			if tt.node != nil {
+				_, err := clientset.CoreV1().Nodes().Create(context.Background(), tt.node, metav1.CreateOptions{})
 				if err != nil {
 					t.Fatalf("Failed to create fake node: %v", err)
 				}

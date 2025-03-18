@@ -33,8 +33,7 @@ func TestGetPluginInfo(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.Equal(t, "your-plugin-name", resp.Name)
-	assert.
-		Equal(t, "0.1.0", resp.VendorVersion)
+	assert.Equal(t, "0.1.0", resp.VendorVersion)
 }
 
 func TestGetPluginCapabilities(t *testing.T) {
