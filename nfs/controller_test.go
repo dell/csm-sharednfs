@@ -218,7 +218,6 @@ func TestUnlockPV(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-
 			cs := &CsiNfsService{}
 
 			PVLock.Store(test.pvName, "")
@@ -231,7 +230,6 @@ func TestUnlockPV(t *testing.T) {
 			if ok {
 				t.Errorf("expected PVLock to not contain value for key %s, but it was not found", test.pvName)
 			}
-
 		})
 	}
 }
@@ -499,7 +497,7 @@ func TestControllerPublishVolume(t *testing.T) {
 				}, nil)
 				fakeK8sClient := fake.NewSimpleClientset()
 
-				fakeK8sClient.AddReactor("get", "services", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				fakeK8sClient.PrependReactor("get", "services", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, &v1.Service{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "test-volume",
@@ -511,7 +509,7 @@ func TestControllerPublishVolume(t *testing.T) {
 					}, nil
 				})
 
-				fakeK8sClient.AddReactor("get", "endpointslice", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				fakeK8sClient.PrependReactor("get", "endpointslices", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, &discoveryv1.EndpointSlice{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      "test-volume",
@@ -601,7 +599,6 @@ func TestControllerPublishVolume(t *testing.T) {
 			} else {
 				assert.Equal(t, test.expectedErr, err)
 			}
-
 		})
 	}
 }
@@ -690,7 +687,6 @@ func TestControllerUnpublishVolume(t *testing.T) {
 	})
 
 	t.Run("remove last client", func(t *testing.T) {
-
 		ctx := context.Background()
 		fakeK8sClient := fake.NewClientset()
 		fakeK8sClient.DiscoveryV1().EndpointSlices("").Create(ctx, &discoveryv1.EndpointSlice{
@@ -776,7 +772,6 @@ func TestControllerUnpublishVolume(t *testing.T) {
 		_, err := csiNfsServce.ControllerUnpublishVolume(ctx, &req)
 		assert.Equal(t, nil, err)
 	})
-
 }
 
 func TestValidateVolumeCapabilities(t *testing.T) {
