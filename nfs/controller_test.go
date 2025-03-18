@@ -397,6 +397,84 @@ func TestControllerPublishVolume(t *testing.T) {
 			expectedErr: errors.New("error calling ControllerPublishVolume on vcsi"),
 		},
 		{
+			name: "Error calling CreateEndpointSlice",
+			createServer: func(t *testing.T) {
+				server := mocks.NewMockNfsServer(gomock.NewController(t))
+				server.EXPECT().ExportNfsVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&proto.ExportNfsVolumeResponse{}, nil)
+				createMockServer(t, "127.0.0.1", server)
+				nodeIpToStatus["127.0.0.1"] = &NodeStatus{
+					online:     true,
+					inRecovery: false,
+				}
+			},
+			csiNfsService: func() *CsiNfsService {
+				mockService := mocks.NewMockService(gomock.NewController(t))
+				mockService.EXPECT().ControllerPublishVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&csi.ControllerPublishVolumeResponse{
+					PublishContext: map[string]string{
+						"csi-nfs": "test-node",
+					},
+				}, nil)
+				fakeK8sClient := fake.NewSimpleClientset()
+
+				fakeK8sClient.PrependReactor("create", "endpointslices", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, errors.New("error creating EndpointSlice")
+				})
+
+				fakeK8sClient.PrependReactor("list", "nodes", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, &v1.NodeList{
+						Items: []v1.Node{
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "worker-node-1",
+									Annotations: map[string]string{
+										"csi.volume.kubernetes.io/nodeid": "{\"csi-powerstore.dellemc.com\":\"csi-node-123-127.0.0.1\"}",
+									},
+								},
+								Status: v1.NodeStatus{
+									Addresses: []v1.NodeAddress{
+										{
+											Address: "127.0.0.1",
+										},
+									},
+								},
+							},
+						},
+					}, nil
+				})
+
+				csiNfsServce := &CsiNfsService{
+					vcsi: mockService,
+					k8sclient: &k8s.K8sClient{
+						Clientset: fakeK8sClient,
+					},
+					waitCreateNfsServiceInterval: 10 * time.Millisecond,
+				}
+				return csiNfsServce
+			}(),
+			req: &csi.ControllerPublishVolumeRequest{
+				VolumeId: "test-volume",
+				NodeId:   "csi-node-123-127.0.0.1",
+				VolumeCapability: &csi.VolumeCapability{
+					AccessType: &csi.VolumeCapability_Block{
+						Block: &csi.VolumeCapability_BlockVolume{},
+					},
+					AccessMode: &csi.VolumeCapability_AccessMode{
+						Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
+					},
+				},
+				VolumeContext: map[string]string{
+					"Name": "volume-name",
+				},
+			},
+			expectedRes: &csi.ControllerPublishVolumeResponse{
+				PublishContext: map[string]string{
+					"name": "volume-name",
+					"nfs":  "test-volume",
+				},
+			},
+			expectedErr: errors.New("error creating EndpointSlice"),
+		},
+		{
 			name: "could not find node",
 			createServer: func(t *testing.T) {
 				server := mocks.NewMockNfsServer(gomock.NewController(t))
