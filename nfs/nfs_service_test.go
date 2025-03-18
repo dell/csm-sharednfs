@@ -138,6 +138,7 @@ func TestUnExportMultipleNfsVolume(t *testing.T) {
 		request     *proto.UnexportMultipleNfsVolumesRequest
 		expected    *proto.UnexportMultipleNfsVolumesResponse
 		service     *mocks.MockService
+		executor    *mocks.MockExecutor
 		expectedErr error
 	}{
 		{
@@ -160,6 +161,10 @@ func TestUnExportMultipleNfsVolume(t *testing.T) {
 				service := mocks.NewMockService(gomock.NewController(t))
 				service.EXPECT().UnmountVolume(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(nil)
 				return service
+			}(),
+			executor: func() *mocks.MockExecutor {
+				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
+				return mockExecutor
 			}(),
 			expectedErr: nil,
 		},
@@ -184,6 +189,11 @@ func TestUnExportMultipleNfsVolume(t *testing.T) {
 				service.EXPECT().UnmountVolume(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(3).Return(fmt.Errorf("failed to unmount"))
 				return service
 			}(),
+			executor: func() *mocks.MockExecutor {
+				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
+				mockExecutor.EXPECT().ExecuteCommand(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(3).Return([]byte{}, fmt.Errorf("failed to resync"))
+				return mockExecutor
+			}(),
 			expectedErr: fmt.Errorf("failed to unmount"),
 		},
 	}
@@ -203,15 +213,16 @@ func TestUnExportMultipleNfsVolume(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
 			nfsService = &CsiNfsService{
 				vcsi: &CsiNfsService{
-					executor: mockExecutor,
+					executor: tc.executor,
 				},
 			}
 
 			nfsService.vcsi = tc.service
-			nfs := &nfsServer{}
+			nfs := &nfsServer{
+				executor: tc.executor,
+			}
 			_, err = nfs.UnexportMultipleNfsVolumes(context.Background(), tc.request)
 			_ = file.Close()
 			_ = os.RemoveAll("/noderoot/etc/")
@@ -288,7 +299,7 @@ func TestNFSPing(t *testing.T) {
 			expectedErr:      nil,
 		},
 		{
-			name: "True DumpAllExports",
+			name: "Error restarting NFSMountd",
 			request: &proto.PingRequest{
 				NodeIpAddress:  "127.0.0.1",
 				DumpAllExports: true,
@@ -333,7 +344,55 @@ func TestNFSPing(t *testing.T) {
 				_ = os.RemoveAll("/noderoot/etc/")
 				_ = os.RemoveAll("/noderoot/export 127.0.0.1(rw)")
 			},
-			expectedErr: fmt.Errorf("timeout reached: nfs-mountd did not restart within 30s\n"),
+			expectedErr: fmt.Errorf("timeout reached: nfs-mountd did not restart within 30s"),
+		},
+		{
+			name: "Error Unmounting Export Directory",
+			request: &proto.PingRequest{
+				NodeIpAddress:  "127.0.0.1",
+				DumpAllExports: true,
+			},
+			expected: &proto.PingResponse{
+				Ready:  true,
+				Status: "",
+			},
+			nfs: func() *nfsServer {
+				mockUnmounter := mocks.NewMockUnmounter(gomock.NewController(t))
+				mockUnmounter.EXPECT().Unmount(gomock.Any(), gomock.Any()).Return(fmt.Errorf("error unmounting"))
+				return &nfsServer{
+					unmounter: mockUnmounter,
+				}
+			}(),
+			executor: func() *mocks.MockExecutor {
+				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
+				mockExecutor.EXPECT().ExecuteCommand(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return([]byte{}, nil)
+				return mockExecutor
+			}(),
+			createExportFile: func() *os.File {
+				err := os.MkdirAll("/noderoot/etc/", os.ModePerm)
+				if err != nil {
+					t.Fatal(err)
+				}
+				err = os.MkdirAll("/noderoot/export 127.0.0.1(rw)", os.ModePerm)
+				if err != nil {
+					t.Fatal(err)
+				}
+				file, err := os.Create("/noderoot/etc/exports")
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, err = file.WriteString("export 127.0.0.1(rw)\n")
+				if err != nil {
+					t.Fatal(err)
+				}
+				return file
+			},
+			deleteExportFile: func(file *os.File) {
+				_ = file.Close()
+				_ = os.RemoveAll("/noderoot/etc/")
+				_ = os.RemoveAll("/noderoot/export 127.0.0.1(rw)")
+			},
+			expectedErr: fmt.Errorf("timeout reached: nfs-mountd did not restart within 30s"),
 		},
 		{
 			name: "No exports File",
