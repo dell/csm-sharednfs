@@ -264,15 +264,15 @@ func TestControllerPublishVolume(t *testing.T) {
 				}, nil)
 				fakeK8sClient := fake.NewSimpleClientset()
 
-				fakeK8sClient.AddReactor("get", "services", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				fakeK8sClient.AddReactor("get", "services", func(_ clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, nil, nil
 				})
 
-				fakeK8sClient.AddReactor("get", "endpointslices", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				fakeK8sClient.AddReactor("get", "endpointslices", func(_ clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, nil, nil
 				})
 
-				fakeK8sClient.PrependReactor("list", "nodes", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				fakeK8sClient.PrependReactor("list", "nodes", func(_ clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, &v1.NodeList{
 						Items: []v1.Node{
 							{
@@ -342,7 +342,7 @@ func TestControllerPublishVolume(t *testing.T) {
 				mockService.EXPECT().ControllerPublishVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(nil, errors.New("error calling ControllerPublishVolume on vcsi"))
 				fakeK8sClient := fake.NewSimpleClientset()
 
-				fakeK8sClient.PrependReactor("list", "nodes", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				fakeK8sClient.PrependReactor("list", "nodes", func(_ clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, &v1.NodeList{
 						Items: []v1.Node{
 							{
@@ -416,11 +416,11 @@ func TestControllerPublishVolume(t *testing.T) {
 				}, nil)
 				fakeK8sClient := fake.NewSimpleClientset()
 
-				fakeK8sClient.PrependReactor("create", "endpointslices", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				fakeK8sClient.PrependReactor("create", "endpointslices", func(_ clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, nil, errors.New("error creating EndpointSlice")
 				})
 
-				fakeK8sClient.PrependReactor("list", "nodes", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				fakeK8sClient.PrependReactor("list", "nodes", func(_ clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, &v1.NodeList{
 						Items: []v1.Node{
 							{
@@ -494,15 +494,15 @@ func TestControllerPublishVolume(t *testing.T) {
 				}, nil)
 				fakeK8sClient := fake.NewSimpleClientset()
 
-				fakeK8sClient.AddReactor("get", "services", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				fakeK8sClient.AddReactor("get", "services", func(_ clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, nil, nil
 				})
 
-				fakeK8sClient.AddReactor("get", "endpointslices", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				fakeK8sClient.AddReactor("get", "endpointslices", func(_ clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, nil, nil
 				})
 
-				fakeK8sClient.PrependReactor("list", "nodes", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				fakeK8sClient.PrependReactor("list", "nodes", func(_ clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, nil, nil
 				})
 
@@ -553,11 +553,11 @@ func TestControllerPublishVolume(t *testing.T) {
 				}, nil)
 				fakeK8sClient := fake.NewSimpleClientset()
 
-				fakeK8sClient.AddReactor("get", "services", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				fakeK8sClient.AddReactor("get", "services", func(_ clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, nil, nil
 				})
 
-				fakeK8sClient.AddReactor("get", "endpointslices", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				fakeK8sClient.AddReactor("get", "endpointslices", func(_ clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, &discoveryv1.EndpointSlice{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      "test-volume",
@@ -572,7 +572,7 @@ func TestControllerPublishVolume(t *testing.T) {
 						nil
 				})
 
-				fakeK8sClient.PrependReactor("list", "nodes", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				fakeK8sClient.PrependReactor("list", "nodes", func(_ clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, &v1.NodeList{
 						Items: []v1.Node{
 							{
@@ -646,7 +646,7 @@ func TestControllerPublishVolume(t *testing.T) {
 				}, nil)
 				fakeK8sClient := fake.NewSimpleClientset()
 
-				fakeK8sClient.PrependReactor("get", "services", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				fakeK8sClient.PrependReactor("get", "services", func(_ clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, &v1.Service{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "test-volume",
@@ -658,7 +658,7 @@ func TestControllerPublishVolume(t *testing.T) {
 					}, nil
 				})
 
-				fakeK8sClient.PrependReactor("get", "endpointslices", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				fakeK8sClient.PrependReactor("get", "endpointslices", func(_ clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, &discoveryv1.EndpointSlice{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      "test-volume",
@@ -673,7 +673,7 @@ func TestControllerPublishVolume(t *testing.T) {
 						nil
 				})
 
-				fakeK8sClient.PrependReactor("list", "nodes", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				fakeK8sClient.PrependReactor("list", "nodes", func(_ clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, &v1.NodeList{
 						Items: []v1.Node{
 							{
