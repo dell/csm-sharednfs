@@ -246,7 +246,7 @@ func (nfs *nfsServer) UnexportNfsVolume(ctx context.Context, req *proto.Unexport
 		}
 		// Restart the nfs-mountd. It may be out of sync.
 		log.Infof("restarting the NFS service as it may be out of sync")
-		restartNFSMountd()
+		restartNFSMountd(nfs.executor)
 		log.Errorf("UnmountVolume %s retry %d returned error %s", exportPath, i, err)
 	}
 	if err != nil {
@@ -297,7 +297,7 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 			}
 		}
 		// err = ResyncNFSMountd(generation)
-		err = restartNFSMountd()
+		err = restartNFSMountd(nfs.executor)
 		// Unmount the exports
 		for _, export := range exports {
 			exportDir := noderoot + "/" + export

@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc"
 	"net"
 	"os"
+	"reflect"
 	"testing"
 )
 
@@ -258,6 +259,7 @@ func TestNFSPing(t *testing.T) {
 		request          *proto.PingRequest
 		expected         *proto.PingResponse
 		nfs              *nfsServer
+		executor         *mocks.MockExecutor
 		createExportFile func() (file *os.File)
 		deleteExportFile func(file *os.File)
 		expectedErr      error
@@ -275,11 +277,15 @@ func TestNFSPing(t *testing.T) {
 			nfs: func() *nfsServer {
 				return &nfsServer{}
 			}(),
+			executor: func() *mocks.MockExecutor {
+				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
+				return mockExecutor
+			}(),
 			createExportFile: func() (file *os.File) {
 				return nil
 			},
 			deleteExportFile: func(_ *os.File) {},
-			expectedErr:      fmt.Errorf("timeout reached: nfs-mountd did not restart within 30s"),
+			expectedErr:      nil,
 		},
 		{
 			name: "True DumpAllExports",
@@ -297,6 +303,11 @@ func TestNFSPing(t *testing.T) {
 				return &nfsServer{
 					unmounter: mockUnmounter,
 				}
+			}(),
+			executor: func() *mocks.MockExecutor {
+				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
+				mockExecutor.EXPECT().ExecuteCommand(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return([]byte{}, nil)
+				return mockExecutor
 			}(),
 			createExportFile: func() *os.File {
 				err := os.MkdirAll("/noderoot/etc/", os.ModePerm)
@@ -322,7 +333,30 @@ func TestNFSPing(t *testing.T) {
 				_ = os.RemoveAll("/noderoot/etc/")
 				_ = os.RemoveAll("/noderoot/export 127.0.0.1(rw)")
 			},
-			expectedErr: nil,
+			expectedErr: fmt.Errorf("timeout reached: nfs-mountd did not restart within 30s\n"),
+		},
+		{
+			name: "No exports File",
+			request: &proto.PingRequest{
+				NodeIpAddress:  "127.0.0.1",
+				DumpAllExports: true,
+			},
+			expected: &proto.PingResponse{
+				Ready:  true,
+				Status: "",
+			},
+			nfs: func() *nfsServer {
+				return &nfsServer{}
+			}(),
+			executor: func() *mocks.MockExecutor {
+				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
+				return mockExecutor
+			}(),
+			createExportFile: func() (file *os.File) {
+				return nil
+			},
+			deleteExportFile: func(_ *os.File) {},
+			expectedErr:      fmt.Errorf("open /noderoot/etc/exports: no such file or directory"),
 		},
 	}
 
@@ -331,7 +365,21 @@ func TestNFSPing(t *testing.T) {
 
 			file := tc.createExportFile()
 			NfsExportDirectory = "export"
-			_, _ = tc.nfs.Ping(context.Background(), tc.request)
+			tc.nfs.executor = tc.executor
+			resp, err := tc.nfs.Ping(context.Background(), tc.request)
+
+			if tc.expectedErr != nil {
+				if tc.expectedErr.Error() != err.Error() {
+					t.Errorf("Expected error: %v, but got: %v", tc.expectedErr, err)
+				}
+			} else {
+				if !errors.Is(err, tc.expectedErr) {
+					t.Errorf("Expected error: %v, but got: %v", tc.expectedErr, err)
+				}
+			}
+			if !reflect.DeepEqual(resp, tc.expected) {
+				t.Fatalf("expected %v, got %v", tc.expected, resp)
+			}
 			tc.deleteExportFile(file)
 		})
 	}
@@ -383,6 +431,35 @@ func TestStartNfsServiceServer(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestListen(t *testing.T) {
+	tests := []struct {
+		name    string
+		address string
+		port    string
+		wantErr bool
+	}{
+		{
+			name:    "Successful listen",
+			address: "127.0.0.1",
+			port:    "9090",
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lis, err := listen(tt.address, tt.port)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("listen() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && lis == nil {
+				t.Errorf("listen() returned nil listener")
 			}
 		})
 	}

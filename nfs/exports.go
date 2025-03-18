@@ -206,7 +206,7 @@ func DeleteExport(directory string) (int64, error) {
 
 // restartNFSMountd restarts the nfs-mountd service using systemctl.
 // This is the last resort of getting the nfs service going again.
-func restartNFSMountd() error {
+func restartNFSMountd(executor Executor) error {
 	exportsLock.Lock()
 	defer exportsLock.Unlock()
 	log.Infof("restarting nfs-mountd")
