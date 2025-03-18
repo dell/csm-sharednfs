@@ -44,7 +44,7 @@ func TestConnect(t *testing.T) {
 	}{
 		{
 			name: "Test Connect with successful connection",
-			newForConfigFunc: func(config *rest.Config) (kubernetes.Interface, error) {
+			newForConfigFunc: func(_ *rest.Config) (kubernetes.Interface, error) {
 				return fakeClientSet, nil
 			},
 			restInClusterFunc: func() (*rest.Config, error) {
@@ -58,7 +58,7 @@ func TestConnect(t *testing.T) {
 		},
 		{
 			name: "Test Connect with failed rest connection",
-			newForConfigFunc: func(config *rest.Config) (kubernetes.Interface, error) {
+			newForConfigFunc: func(_ *rest.Config) (kubernetes.Interface, error) {
 				return fake.NewSimpleClientset(), nil
 			},
 			restInClusterFunc: func() (*rest.Config, error) {
@@ -70,7 +70,7 @@ func TestConnect(t *testing.T) {
 		},
 		{
 			name: "Test Connect with failed k8s client connection",
-			newForConfigFunc: func(config *rest.Config) (kubernetes.Interface, error) {
+			newForConfigFunc: func(_ *rest.Config) (kubernetes.Interface, error) {
 				return nil, errors.New("failed to create k8s client")
 			},
 			restInClusterFunc: func() (*rest.Config, error) {
@@ -601,7 +601,7 @@ func TestGetNodeByCSINodeId(t *testing.T) {
 	tests := []struct {
 		name      string
 		driverKey string
-		csiNodeId string
+		csiNodeID string
 		node      *v1.Node
 		wantNode  *v1.Node
 		wantErr   bool
@@ -609,7 +609,7 @@ func TestGetNodeByCSINodeId(t *testing.T) {
 		{
 			name:      "successful retrieval",
 			driverKey: "csi-powerstore.dellemc.com",
-			csiNodeId: "csi-node-e8d45b5d10cc4f79953ba100c7fff4cb-10.20.30.40",
+			csiNodeID: "csi-node-e8d45b5d10cc4f79953ba100c7fff4cb-10.20.30.40",
 			wantNode: &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "node1",
@@ -631,7 +631,7 @@ func TestGetNodeByCSINodeId(t *testing.T) {
 		{
 			name:      "bad json retrieval",
 			driverKey: "csi.volume.kubernetes.io/nodeid",
-			csiNodeId: "csi-node-e8d45b5d10cc4f79953ba100c7fff4cb-10.20.30.40",
+			csiNodeID: "csi-node-e8d45b5d10cc4f79953ba100c7fff4cb-10.20.30.40",
 			node: &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "node1",
@@ -646,7 +646,7 @@ func TestGetNodeByCSINodeId(t *testing.T) {
 		{
 			name:      "error retrieving nodes",
 			driverKey: "csi.volume.kubernetes.io/nodeid",
-			csiNodeId: "node2",
+			csiNodeID: "node2",
 			node: &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "node1",
@@ -678,7 +678,7 @@ func TestGetNodeByCSINodeId(t *testing.T) {
 			}
 
 			// Call the GetNodeByCSINodeId method
-			result, err := k8sClient.GetNodeByCSINodeID(context.Background(), tt.driverKey, tt.csiNodeId)
+			result, err := k8sClient.GetNodeByCSINodeID(context.Background(), tt.driverKey, tt.csiNodeID)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetNodeByCSINodeId() error = %v, wantErr %v", err, tt.wantErr)
 				return

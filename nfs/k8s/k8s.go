@@ -100,7 +100,6 @@ func (kc *Client) GetNode(ctx context.Context, nodeName string) (*v1.Node, error
 	return kc.Clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 }
 
-
 // GetlEndpointSlices returns the endpointslices matching match labels.
 func (kc *Client) GetEndpointSlices(ctx context.Context, namespace, labelSelector string) ([]*discoveryv1.EndpointSlice, error) {
 	log.Infof("csi-nfs: retrieving all endpointslices")
