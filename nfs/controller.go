@@ -248,12 +248,13 @@ func (cs *CsiNfsService) makeNfsService(ctx context.Context, namespace, name str
 	maps.Copy(exportNfsVolumeRequest.ExportNfsContext, subpublishResponse.PublishContext)
 	var nodeResponse *proto.ExportNfsVolumeResponse
 	var nodeError error
-	var nodeDone bool
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		start := time.Now()
 		log.Infof("asynchronously calling ExportNfsVolume")
 		nodeResponse, nodeError = cs.callExportNfsVolume(ctx, nodeIPAddress, exportNfsVolumeRequest)
-		nodeDone = true
 		log.Infof("node ExportNfsVolume took %v error %v", time.Since(start), nodeError)
 	}()
 
@@ -337,11 +338,11 @@ func (cs *CsiNfsService) makeNfsService(ctx context.Context, namespace, name str
 		log.Infof("Could not create service %s: %s", name, err.Error())
 		return nil, err
 	}
+
 	// Wait on the node processing to complete
-	for !nodeDone {
-		log.Infof("waiting on node done %s %s...", nodeIPAddress, name)
-		time.Sleep(cs.waitCreateNfsServiceInterval)
-	}
+	log.Infof("waiting on node done %s %s...", nodeIPAddress, name)
+	wg.Wait()
+
 	if nodeError != nil {
 		// Retry the call to ExportNfsVolume if the first attempt failed
 		start := time.Now()
