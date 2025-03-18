@@ -23,6 +23,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	k8s "github.com/dell/csm-hbnfs/nfs/k8s"
 	"github.com/dell/csm-hbnfs/nfs/mocks"
@@ -265,9 +266,10 @@ func TestNew(t *testing.T) {
 				provisionerName: "csi-powerstore.dellemc.com",
 			},
 			want: &CsiNfsService{
-				provisionerName: "csi-powerstore.dellemc.com",
-				executor:        &LocalExecutor{},
-				failureRetries:  10,
+				provisionerName:              "csi-powerstore.dellemc.com",
+				executor:                     &LocalExecutor{},
+				failureRetries:               10,
+				waitCreateNfsServiceInterval: 10 * time.Second,
 			},
 		},
 	}
@@ -307,10 +309,11 @@ func TestPutVcsiService(t *testing.T) {
 				_ = New("csi-powerstore.dellemc.com")
 			},
 			want: &CsiNfsService{
-				vcsi:            &CsiNfsService{},
-				provisionerName: "csi-powerstore.dellemc.com",
-				executor:        &LocalExecutor{},
-				failureRetries:  10,
+				vcsi:                         &CsiNfsService{},
+				provisionerName:              "csi-powerstore.dellemc.com",
+				executor:                     &LocalExecutor{},
+				failureRetries:               10,
+				waitCreateNfsServiceInterval: 10 * time.Second,
 			},
 		},
 	}

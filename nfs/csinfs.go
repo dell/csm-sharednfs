@@ -23,6 +23,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	k8s "github.com/dell/csm-hbnfs/nfs/k8s"
@@ -47,18 +48,18 @@ type Service interface {
 }
 
 type CsiNfsService struct {
-	vcsi            Service
-	md              Service
-	provisionerName string
-	mode            string
-	nodeID          string
-	nodeIPAddress   string
-	podCIDR         string
-	nodeName        string
-	failureRetries  int
-
-	k8sclient *k8s.Client
-	executor  Executor
+	vcsi                         Service
+	md                           Service
+	provisionerName              string
+	mode                         string
+	nodeID                       string
+	nodeIPAddress                string
+	podCIDR                      string
+	nodeName                     string
+	failureRetries               int
+	k8sclient                    *k8s.Client
+	executor                     Executor
+	waitCreateNfsServiceInterval time.Duration
 }
 
 // OSInterface is an interface that is satisfied by various functions from the
@@ -161,9 +162,10 @@ var nfsService *CsiNfsService
 
 func New(provisionerName string) Service {
 	nfsService = &CsiNfsService{
-		provisionerName: provisionerName,
-		executor:        &LocalExecutor{},
-		failureRetries:  10,
+		provisionerName:              provisionerName,
+		executor:                     &LocalExecutor{},
+		failureRetries:               10,
+		waitCreateNfsServiceInterval: 10 * time.Second,
 	}
 	return nfsService
 }

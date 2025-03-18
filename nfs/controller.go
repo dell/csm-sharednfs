@@ -72,22 +72,11 @@ func (cs *CsiNfsService) DeleteVolume(_ context.Context, _ *csi.DeleteVolumeRequ
 	return &csi.DeleteVolumeResponse{}, nil
 }
 
-func (cs *CsiNfsService) HighPriorityLockPV(name, requestID string) {
-	var logged bool
-	for {
-		holder, loaded := PVLock.LoadOrStore(name, requestID)
-		if !loaded {
-			break
-		}
-		if !logged {
-			log.Infof("%s Waiting on PVLock holder %s", requestID, holder)
-			logged = true
-		}
-		time.Sleep(200 * time.Millisecond)
+func (cs *CsiNfsService) LockPV(name, requestID string, highPriority bool) {
+	sleepTime := 3 * time.Second
+	if highPriority {
+		sleepTime = 200 * time.Millisecond
 	}
-}
-
-func (cs *CsiNfsService) LockPV(name, requestID string) {
 	var logged bool
 	for {
 		holder, loaded := PVLock.LoadOrStore(name, requestID)
@@ -98,7 +87,7 @@ func (cs *CsiNfsService) LockPV(name, requestID string) {
 			log.Infof("%s waiting on PVLock holder %s", requestID, holder)
 			logged = true
 		}
-		time.Sleep(3 * time.Second)
+		time.Sleep(sleepTime)
 	}
 }
 
@@ -138,7 +127,7 @@ func (cs *CsiNfsService) ControllerPublishVolume(ctx context.Context,
 	log.Infof("Entered nfs ControllerPublishVolume %s %s %+v", name, req.VolumeId, req)
 
 	// Get lock for concurrency
-	cs.LockPV(req.VolumeId, requestID)
+	cs.LockPV(req.VolumeId, requestID, false)
 	defer cs.UnlockPV(req.VolumeId)
 
 	// Read the PV. This is necessary from which to determine the namespace.
@@ -169,7 +158,7 @@ func (cs *CsiNfsService) ControllerPublishVolume(ctx context.Context,
 	} else {
 		return nil, status.Errorf(codes.Internal, "could not determine address of Node %s", req.NodeId)
 	}
-	log.Infof("nfs nodeIPAddress %s", nodeIPAddress)
+	log.Infof("nfs nodeIpAddress %s", nodeIPAddress)
 
 	// Look to see if there is an existing endpoint slice, and then associated service.
 	service, endpoint, err := cs.getServiceAndSlice(ctx, serviceName)
@@ -210,15 +199,15 @@ func (cs *CsiNfsService) ControllerPublishVolume(ctx context.Context,
 func (cs *CsiNfsService) getServiceAndSlice(ctx context.Context, serviceName string) (*corev1.Service, *discoveryv1.EndpointSlice, error) {
 	namespace := DriverNamespace
 	// Look to see if there is an existing endpoint slice, and then associated service.
-	endpoint, err := cs.k8sclient.GetEndpointSlice(ctx, namespace, serviceName)
-	if err != nil {
+	endpoint, endpointErr := cs.k8sclient.GetEndpointSlice(ctx, namespace, serviceName)
+	if endpointErr != nil {
 		log.Infof("endpointSlice %s/%s not found: %+v", namespace, serviceName, endpoint)
-		return nil, nil, err
+		return nil, nil, endpointErr
 	}
-	service, err := cs.k8sclient.GetService(ctx, namespace, serviceName)
-	if err != nil {
-		log.Infof("err %s/%s not found: %+v", namespace, serviceName, service)
-		return nil, endpoint, err
+	service, serviceErr := cs.k8sclient.GetService(ctx, namespace, serviceName)
+	if serviceErr != nil {
+		log.Infof("service_err %s/%s not found: %+v", namespace, serviceName, service)
+		return nil, endpoint, serviceErr
 	}
 	return service, endpoint, nil
 }
@@ -351,7 +340,7 @@ func (cs *CsiNfsService) makeNfsService(ctx context.Context, namespace, name str
 	// Wait on the node processing to complete
 	for !nodeDone {
 		log.Infof("waiting on node done %s %s...", nodeIPAddress, name)
-		time.Sleep(10 * time.Second)
+		time.Sleep(cs.waitCreateNfsServiceInterval)
 	}
 	if nodeError != nil {
 		// Retry the call to ExportNfsVolume if the first attempt failed
@@ -446,7 +435,7 @@ func (cs *CsiNfsService) ControllerUnpublishVolume(ctx context.Context, req *csi
 	resp := &csi.ControllerUnpublishVolumeResponse{}
 
 	// Get lock for concurrency
-	cs.LockPV(req.VolumeId, requestID)
+	cs.LockPV(req.VolumeId, requestID, false)
 	defer cs.UnlockPV(req.VolumeId)
 
 	service, slice, err := cs.getServiceAndSlice(ctx, serviceName)

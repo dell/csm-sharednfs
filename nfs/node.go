@@ -71,7 +71,7 @@ func (ns *CsiNfsService) nodePublishVolume(ctx context.Context, req *csi.NodePub
 	// Add a bind mount from the staging directory to the pod's target directory.
 	// Get lock for concurrency
 	serviceName := VolumeIDToServiceName(req.VolumeId)
-	ns.LockPV(req.VolumeId, req.VolumeId)
+	ns.LockPV(req.VolumeId, req.VolumeId, false)
 	defer ns.UnlockPV(req.VolumeId)
 
 	log.Infof("csi-nfs NodePublishVolume called volumeID %s", req.VolumeId)
@@ -131,7 +131,7 @@ func (ns *CsiNfsService) NodeUnpublishVolume(_ context.Context, req *csi.NodeUnp
 	start := time.Now()
 	target := req.TargetPath
 	// Get lock for concurrency
-	ns.LockPV(req.VolumeId, req.VolumeId)
+	ns.LockPV(req.VolumeId, req.VolumeId, false)
 	defer ns.UnlockPV(req.VolumeId)
 	if !IsNFSVolumeID(req.VolumeId) {
 		return &csi.NodeUnpublishVolumeResponse{}, fmt.Errorf("nfs NodeUnpublishVolume called on non NFS volume %s", req.VolumeId)
