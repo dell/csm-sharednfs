@@ -74,6 +74,10 @@ type OSInterface interface {
 	Getenv(string) string
 	// os.MkdirAll()
 	MkdirAll(string, os.FileMode) error
+	// os.Open()
+	Open(string) (*os.File, error)
+	// os.OpenFile()
+	OpenFile(string, int, os.FileMode) (*os.File, error)
 }
 
 type OSImpl struct{}
@@ -90,6 +94,14 @@ func (o *OSImpl) Getenv(envName string) string {
 
 func (o *OSImpl) MkdirAll(fileName string, perm os.FileMode) error {
 	return os.MkdirAll(fileName, perm)
+}
+
+func (o *OSImpl) Open(fileName string) (*os.File, error) {
+	return os.Open(fileName)
+}
+
+func (o *OSImpl) OpenFile(fileName string, flag int, perm os.FileMode) (*os.File, error) {
+	return os.OpenFile(fileName, flag, perm)
 }
 
 func IsNFSStorageClass(parameters map[string]string) bool {
@@ -270,34 +282,34 @@ func (s *CsiNfsService) BeforeServe(ctx context.Context, _ *gocsi.StoragePlugin,
 	}
 	log.Infof("csinode nodeIPAddress %s podCIDR %s", s.nodeIPAddress, s.podCIDR)
 
-	// Set up an NFS server for the node pods
-	if s.mode == "node" {
-
-		// Get the NfsExportDirectory if set and use it.
-		if os.Getenv("NfsExportDirectory") != "" {
-			NfsExportDirectory = os.Getenv("NfsExportDir")
-		}
-		// Process the NfsExportDirectory
-		log.Infof("Looking for NFS Export Directory %s", NodeRoot+NfsExportDirectory)
-		if _, err = os.Stat(NodeRoot + NfsExportDirectory); err != nil {
-			err = os.MkdirAll(NodeRoot+NfsExportDirectory, 0777)
-			if err != nil {
-				log.Infof("MkdirAll %s failed: %s", NodeRoot+NfsExportDirectory, err.Error())
-			} else {
-				log.Infof("NfsExportDirecotry %s", NfsExportDirectory)
-			}
-		}
-
-		if err = s.initializeNfsServer(); err != nil {
-			log.Errorf("host nfs-server failed to initialize")
-		}
-
-		// Start the NFS server listener
-		// TODO: make port configurable from environment
-		go startNfsServiceServer(s.nodeIPAddress, getServerPort(), listen, serve)
-	} else {
-		s.startNodeMonitors()
+	if s.mode != "node" {
+		return s.startNodeMonitors()
 	}
+
+	// Set up an NFS server for the node pods
+	// Process the NfsExportDirectory
+	log.Infof("Looking for NFS Export Directory %s", NodeRoot+NfsExportDirectory)
+	if _, err = opSys.Stat(NodeRoot + NfsExportDirectory); err != nil {
+		err = opSys.MkdirAll(NodeRoot+NfsExportDirectory, 0o777)
+		if err != nil {
+			log.Infof("MkdirAll %s failed: %s", NodeRoot+NfsExportDirectory, err.Error())
+		} else {
+			log.Infof("NfsExportDirecotry %s", NfsExportDirectory)
+		}
+	}
+
+	if err = s.initializeNfsServer(); err != nil {
+		log.Errorf("host nfs-server failed to initialize")
+	}
+
+	// Start the NFS server listener
+	// TODO: make port configurable from environment
+	go func() {
+		err := startNfsServiceServer(s.nodeIPAddress, getServerPort(), listen, serve)
+		if err != nil {
+			log.Errorf("failed to start nfs service. err: %s", err.Error())
+		}
+	}()
 
 	return nil
 }

@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -83,7 +83,7 @@ func startNfsServiceServer(ipAddress, port string, listenFunc ListenFunc, serveF
 		&nfsServer{
 			executor:  &LocalExecutor{},
 			unmounter: &SyscallUnmount{},
-	})
+		})
 	if err := serveFunc(grpcServer, lis); err != nil {
 		log.Errorf("csinfs: grpcServer.Serve failed: %s", err.Error())
 		return err
@@ -146,22 +146,24 @@ func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsV
 		return resp, err
 	}
 	log.Infof("Calling Chown %s %d %d", path, RootUID, nfsGroupID)
-	err = os.Chown(path, RootUID, nfsGroupID)
+	// err = os.Chown(path, RootUID, nfsGroupID)
+	output, err := nfs.executor.ExecuteCommand("chown", strconv.Itoa(RootUID), ":", strconv.Itoa(nfsGroupID), path)
 	if err != nil {
-		log.Errorf("Chown path %s error %s", path, err)
+		log.Errorf("failed chown output: %s %s", err, output)
 		return resp, err
 	}
 
 	// This code is required (doesn't work without it), not sure if the chrooot chmod is needed also.
 	log.Infof("Calling Chmod %s mode %o", path, NfsFileMode)
-	err = os.Chmod(path, NfsFileMode)
+	// err = os.Chmod(path, NfsFileMode)
+	output, err = nfs.executor.ExecuteCommand("chmod", strconv.Itoa(NfsFileMode), path)
 	if err != nil {
-		log.Errorf("Chmod of %s failed: %s", path, err)
+		log.Errorf("failed chmod output: %s %s", err, output)
 		return resp, err
 	}
 
 	log.Infof("Calling chroot chmod %s %o", path, NfsFileMode)
-	output, err := nfs.executor.ExecuteCommand("chroot", "/noderoot", "chmod", NfsFileModeString, path)
+	output, err = nfs.executor.ExecuteCommand("chroot", "/noderoot", "chmod", NfsFileModeString, path)
 	if err != nil {
 		log.Errorf("failed chroot chmod output: %s %s", err, string(output))
 		return resp, err
@@ -202,10 +204,10 @@ func (nfs *nfsServer) UnexportNfsVolume(ctx context.Context, req *proto.Unexport
 	defer finish(ctx, "UnexportNfsVolume", req.VolumeId, start)
 	log.Infof("Received UnexportNfsVolume request: %+v", req)
 	unexportContext := make(map[string]string)
-	// exportNfsLock.Lock()
-	// defer exportNfsLock.Unlock()
+
 	nfs.nfsLockPV(req.VolumeId)
 	defer nfs.nfsUnlockPV(req.VolumeId)
+
 	serviceName := req.UnexportNfsContext["ServiceName"]
 
 	// Remove the mount entry from /etc/exports.
@@ -227,7 +229,6 @@ func (nfs *nfsServer) UnexportNfsVolume(ctx context.Context, req *proto.Unexport
 		return resp, err
 	}
 	err = ResyncNFSMountd(generation)
-	// err = restartNFSMountd()
 	if err != nil {
 		log.Errorf("ResyncNfsMountd on behalf of %s returned error %s", exportPath, err)
 		return resp, err
@@ -250,7 +251,7 @@ func (nfs *nfsServer) UnexportNfsVolume(ctx context.Context, req *proto.Unexport
 		}
 		// Restart the nfs-mountd. It may be out of sync.
 		log.Infof("restarting the NFS service as it may be out of sync")
-		restartNFSMountd(nfs.executor)
+		restartNFSMountd()
 		log.Errorf("UnmountVolume %s retry %d returned error %s", exportPath, i, err)
 	}
 	if err != nil {
@@ -301,10 +302,10 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 			}
 		}
 		// err = ResyncNFSMountd(generation)
-		err = restartNFSMountd(nfs.executor)
+		err = restartNFSMountd()
 		// Unmount the exports
 		for _, export := range exports {
-			exportDir := noderoot + "/" + export
+			exportDir := nodeRoot + "/" + export
 			log.Infof("Attempting unmount %s", NfsExportDirectory)
 			err := nfs.unmounter.Unmount(exportDir, 0)
 			if err != nil {
