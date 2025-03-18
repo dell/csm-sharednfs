@@ -79,7 +79,11 @@ func startNfsServiceServer(ipAddress, port string, listenFunc ListenFunc, serveF
 	}
 	grpcServer := grpc.NewServer()
 	log.Infof("csinfs: Calling RegisterNfsServer")
-	proto.RegisterNfsServer(grpcServer, &nfsServer{})
+	proto.RegisterNfsServer(grpcServer,
+		&nfsServer{
+			executor:  &LocalExecutor{},
+			unmounter: &SyscallUnmount{},
+	})
 	if err := serveFunc(grpcServer, lis); err != nil {
 		log.Errorf("csinfs: grpcServer.Serve failed: %s", err.Error())
 		return err
