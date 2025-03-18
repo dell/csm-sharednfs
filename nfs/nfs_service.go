@@ -34,8 +34,10 @@ import (
 	"github.com/dell/csm-hbnfs/nfs/proto"
 )
 
-type ListenFunc func(network, address string) (net.Listener, error)
-type ServeFunc func(s *grpc.Server, lis net.Listener) error
+type (
+	ListenFunc func(network, address string) (net.Listener, error)
+	ServeFunc  func(s *grpc.Server, lis net.Listener) error
+)
 
 type nfsServer struct {
 	proto.UnimplementedNfsServer

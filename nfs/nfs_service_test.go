@@ -456,7 +456,6 @@ func TestNFSPing(t *testing.T) {
 	waitTime = 1 * time.Second
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-
 			file := tc.createExportFile()
 			NfsExportDirectory = "export"
 			tc.nfs.executor = tc.executor
@@ -512,13 +511,13 @@ func TestStartNfsServiceServer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			listenFunc := func(network, address string) (net.Listener, error) {
+			listenFunc := func(_, _ string) (net.Listener, error) {
 				if tt.listenErr != nil {
 					return nil, tt.listenErr
 				}
 				return &mockListener{}, nil
 			}
-			serveFunc := func(s *grpc.Server, lis net.Listener) error {
+			serveFunc := func(_ *grpc.Server, _ net.Listener) error {
 				if tt.serveErr != nil {
 					return tt.serveErr
 				}
