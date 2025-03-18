@@ -158,7 +158,7 @@ func (cs *CsiNfsService) ControllerPublishVolume(ctx context.Context,
 	} else {
 		return nil, status.Errorf(codes.Internal, "could not determine address of Node %s", req.NodeId)
 	}
-	log.Infof("nfs nodeIPAddress %s", nodeIPAddress)
+	log.Infof("nfs nodeIpAddress %s", nodeIPAddress)
 
 	// Look to see if there is an existing endpoint slice, and then associated service.
 	service, endpoint, err := cs.getServiceAndSlice(ctx, serviceName)
@@ -199,15 +199,15 @@ func (cs *CsiNfsService) ControllerPublishVolume(ctx context.Context,
 func (cs *CsiNfsService) getServiceAndSlice(ctx context.Context, serviceName string) (*corev1.Service, *discoveryv1.EndpointSlice, error) {
 	namespace := DriverNamespace
 	// Look to see if there is an existing endpoint slice, and then associated service.
-	endpoint, err := cs.k8sclient.GetEndpointSlice(ctx, namespace, serviceName)
-	if err != nil {
+	endpoint, endpointErr := cs.k8sclient.GetEndpointSlice(ctx, namespace, serviceName)
+	if endpointErr != nil {
 		log.Infof("endpointSlice %s/%s not found: %+v", namespace, serviceName, endpoint)
-		return nil, nil, err
+		return nil, nil, endpointErr
 	}
-	service, err := cs.k8sclient.GetService(ctx, namespace, serviceName)
-	if err != nil {
-		log.Infof("err %s/%s not found: %+v", namespace, serviceName, service)
-		return nil, endpoint, err
+	service, serviceErr := cs.k8sclient.GetService(ctx, namespace, serviceName)
+	if serviceErr != nil {
+		log.Infof("service_err %s/%s not found: %+v", namespace, serviceName, service)
+		return nil, endpoint, serviceErr
 	}
 	return service, endpoint, nil
 }
