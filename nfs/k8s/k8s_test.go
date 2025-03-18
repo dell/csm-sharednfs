@@ -39,7 +39,7 @@ func TestConnect(t *testing.T) {
 		name              string
 		newForConfigFunc  func(config *rest.Config) (kubernetes.Interface, error)
 		restInClusterFunc func() (*rest.Config, error)
-		want              *K8sClient
+		want              *Client
 		wantErr           bool
 	}{
 		{
@@ -51,7 +51,7 @@ func TestConnect(t *testing.T) {
 				return &rest.Config{}, nil
 			},
 
-			want: &K8sClient{
+			want: &Client{
 				Clientset: fakeClientSet,
 			},
 			wantErr: false,
@@ -109,7 +109,7 @@ func TestCreateService(t *testing.T) {
 	}
 
 	// Create a fake K8sClient
-	k8sClient := &K8sClient{
+	k8sClient := &Client{
 		Clientset: clientset,
 	}
 
@@ -136,7 +136,7 @@ func TestGetService(t *testing.T) {
 		},
 	}
 	// Create a fake K8sClient
-	k8sClient := &K8sClient{
+	k8sClient := &Client{
 		Clientset: clientset,
 	}
 
@@ -170,7 +170,7 @@ func TestUpdateService(t *testing.T) {
 		},
 	}
 	// Create a fake K8sClient
-	k8sClient := &K8sClient{
+	k8sClient := &Client{
 		Clientset: clientset,
 	}
 
@@ -216,7 +216,7 @@ func TestDeleteService(t *testing.T) {
 		},
 	}
 	// Create a fake K8sClient
-	k8sClient := &K8sClient{
+	k8sClient := &Client{
 		Clientset: clientset,
 	}
 
@@ -253,7 +253,7 @@ func TestGetEndpointSlice(t *testing.T) {
 	}
 
 	// Create a fake K8sClient
-	k8sClient := &K8sClient{
+	k8sClient := &Client{
 		Clientset: clientset,
 	}
 
@@ -284,7 +284,7 @@ func TestCreateEndpointSlice(t *testing.T) {
 	}
 
 	// Create a fake K8sClient
-	k8sClient := &K8sClient{
+	k8sClient := &Client{
 		Clientset: clientset,
 	}
 
@@ -319,7 +319,7 @@ func TestUpdateEndpointSlice(t *testing.T) {
 	}
 
 	// Create a fake K8sClient
-	k8sClient := &K8sClient{
+	k8sClient := &Client{
 		Clientset: clientset,
 	}
 
@@ -359,7 +359,7 @@ func TestDeleteEndpointSlice(t *testing.T) {
 	}
 
 	// Create a fake K8sClient
-	k8sClient := &K8sClient{
+	k8sClient := &Client{
 		Clientset: clientset,
 	}
 
@@ -393,7 +393,7 @@ func TestGetPersistentVolume(t *testing.T) {
 	}
 
 	// Create a fake K8sClient
-	k8sClient := &K8sClient{
+	k8sClient := &Client{
 		Clientset: clientset,
 	}
 
@@ -426,7 +426,7 @@ func TestGetNode(t *testing.T) {
 	}
 
 	// Create a fake K8sClient
-	k8sClient := &K8sClient{
+	k8sClient := &Client{
 		Clientset: clientset,
 	}
 
@@ -512,7 +512,7 @@ func TestGetEndpointSlices(t *testing.T) {
 			}
 
 			// Create a fake K8sClient
-			k8sClient := &K8sClient{
+			k8sClient := &Client{
 				Clientset: clientset,
 			}
 
@@ -575,7 +575,7 @@ func TestGetAllNodes(t *testing.T) {
 			}
 
 			// Create a fake K8sClient
-			k8sClient := &K8sClient{
+			k8sClient := &Client{
 				Clientset: clientset,
 			}
 
@@ -666,7 +666,7 @@ func TestGetNodeByCSINodeId(t *testing.T) {
 			clientset := fake.NewSimpleClientset()
 
 			// Create a fake K8sClient
-			k8sClient := &K8sClient{
+			k8sClient := &Client{
 				Clientset: clientset,
 			}
 
@@ -678,7 +678,7 @@ func TestGetNodeByCSINodeId(t *testing.T) {
 			}
 
 			// Call the GetNodeByCSINodeId method
-			result, err := k8sClient.GetNodeByCSINodeId(context.Background(), tt.driverKey, tt.csiNodeId)
+			result, err := k8sClient.GetNodeByCSINodeID(context.Background(), tt.driverKey, tt.csiNodeId)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetNodeByCSINodeId() error = %v, wantErr %v", err, tt.wantErr)
 				return
