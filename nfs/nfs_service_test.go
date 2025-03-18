@@ -6,20 +6,40 @@ import (
 	"fmt"
 	"github.com/dell/csm-hbnfs/nfs/mocks"
 	"github.com/dell/csm-hbnfs/nfs/proto"
+	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/grpc"
+	"net"
 	"os"
 	"testing"
 )
+
+// MockListener is a mock implementation of net.Listener
+type mockListener struct{}
+
+func (m *mockListener) Accept() (net.Conn, error) {
+	return nil, nil
+}
+
+func (m *mockListener) Close() error {
+	return nil
+}
+
+func (m *mockListener) Addr() net.Addr {
+	return nil
+}
 
 func TestExportMultipleNfsVolume(t *testing.T) {
 	testCases := []struct {
 		name         string
 		request      *proto.ExportMultipleNfsVolumesRequest
 		expectedResp *proto.ExportMultipleNfsVolumesResponse
+		service      *mocks.MockService
+		executor     *mocks.MockExecutor
 		expectedErr  error
 	}{
 		{
-			name: "Empty Volume Mount Path",
+			name: "Successful ExportMultipleNfsVolumes",
 			request: &proto.ExportMultipleNfsVolumesRequest{
 				VolumeIds: []string{
 					"test-volume",
@@ -33,7 +53,44 @@ func TestExportMultipleNfsVolume(t *testing.T) {
 				},
 				ExportNfsContext: map[string]string{"test-key": "test-value"},
 			},
+			service: func() *mocks.MockService {
+				service := mocks.NewMockService(gomock.NewController(t))
+				service.EXPECT().MountVolume(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return("/noderoot/etc/exports", nil)
+				return service
+			}(),
+
+			executor: func() *mocks.MockExecutor {
+				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
+				mockExecutor.EXPECT().ExecuteCommand(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(2).Return([]byte{}, nil)
+				return mockExecutor
+			}(),
 			expectedErr: nil,
+		},
+		{
+			name: "UnSuccessful ExportMultipleNfsVolumes",
+			request: &proto.ExportMultipleNfsVolumesRequest{
+				VolumeIds: []string{
+					"test-volume",
+				},
+				ExportNfsContext: map[string]string{"test-key": "test-value"},
+			},
+
+			expectedResp: &proto.ExportMultipleNfsVolumesResponse{
+				UnsuccessfulIds: []string{
+					"test-volume",
+				},
+				ExportNfsContext: map[string]string{"test-key": "test-value"},
+			},
+			service: func() *mocks.MockService {
+				service := mocks.NewMockService(gomock.NewController(t))
+				service.EXPECT().MountVolume(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return("/noderoot/etc/exports", fmt.Errorf("failed to mount volume"))
+				return service
+			}(),
+			executor: func() *mocks.MockExecutor {
+				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
+				return mockExecutor
+			}(),
+			expectedErr: fmt.Errorf("failed to mount volume"),
 		},
 	}
 
@@ -48,28 +105,27 @@ func TestExportMultipleNfsVolume(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
-			mockExecutor.EXPECT().ExecuteCommand(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(2).Return([]byte{}, nil)
-
 			nfsService = &CsiNfsService{
 				vcsi: &CsiNfsService{
-					executor: mockExecutor,
+					executor: tc.executor,
 				},
 			}
-			
-			service := mocks.NewMockService(gomock.NewController(t))
-			service.EXPECT().MountVolume(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return("/noderoot/etc/exports", nil)
-			nfsService.vcsi = service
-
+			nfsService.vcsi = tc.service
 			nfs := &nfsServer{
-				executor: mockExecutor,
+				executor: tc.executor,
 			}
 			_, err = nfs.ExportMultipleNfsVolumes(context.Background(), tc.request)
 			_ = file.Close()
 			_ = os.RemoveAll("/noderoot/etc/")
 
-			if !errors.Is(err, tc.expectedErr) {
-				t.Errorf("Expected error: %v, but got: %v", tc.expectedErr, err)
+			if tc.expectedErr != nil {
+				if tc.expectedErr.Error() != err.Error() {
+					t.Errorf("Expected error: %v, but got: %v", tc.expectedErr, err)
+				}
+			} else {
+				if !errors.Is(err, tc.expectedErr) {
+					t.Errorf("Expected error: %v, but got: %v", tc.expectedErr, err)
+				}
 			}
 		})
 	}
@@ -80,6 +136,7 @@ func TestUnExportMultipleNfsVolume(t *testing.T) {
 		name        string
 		request     *proto.UnexportMultipleNfsVolumesRequest
 		expected    *proto.UnexportMultipleNfsVolumesResponse
+		service     *mocks.MockService
 		expectedErr error
 	}{
 		{
@@ -98,7 +155,35 @@ func TestUnExportMultipleNfsVolume(t *testing.T) {
 					"test-key":    "test-value",
 				},
 			},
+			service: func() *mocks.MockService {
+				service := mocks.NewMockService(gomock.NewController(t))
+				service.EXPECT().UnmountVolume(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(nil)
+				return service
+			}(),
 			expectedErr: nil,
+		},
+		{
+			name: "Unsuccessful UnExportMultipleNfsVolumes",
+			request: &proto.UnexportMultipleNfsVolumesRequest{
+				VolumeIds: []string{"test-volume"},
+				ExportNfsContext: map[string]string{
+					"ServiceName": "test-service",
+					"test-key":    "test-value",
+				},
+			},
+			expected: &proto.UnexportMultipleNfsVolumesResponse{
+				UnsuccessfulIds: []string{"test-volume"},
+				ExportNfsContext: map[string]string{
+					"ServiceName": "test-service",
+					"test-key":    "test-value",
+				},
+			},
+			service: func() *mocks.MockService {
+				service := mocks.NewMockService(gomock.NewController(t))
+				service.EXPECT().UnmountVolume(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(3).Return(fmt.Errorf("failed to unmount"))
+				return service
+			}(),
+			expectedErr: fmt.Errorf("failed to unmount"),
 		},
 	}
 
@@ -124,24 +209,26 @@ func TestUnExportMultipleNfsVolume(t *testing.T) {
 				},
 			}
 
-			service := mocks.NewMockService(gomock.NewController(t))
-			service.EXPECT().UnmountVolume(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(nil)
-			nfsService.vcsi = service
-
+			nfsService.vcsi = tc.service
 			nfs := &nfsServer{}
 			_, err = nfs.UnexportMultipleNfsVolumes(context.Background(), tc.request)
 			_ = file.Close()
 			_ = os.RemoveAll("/noderoot/etc/")
 
-			if !errors.Is(err, tc.expectedErr) {
-				t.Errorf("Expected error: %v, but got: %v", tc.expectedErr, err)
+			if tc.expectedErr != nil {
+				if tc.expectedErr.Error() != err.Error() {
+					t.Errorf("Expected error: %v, but got: %v", tc.expectedErr, err)
+				}
+			} else {
+				if !errors.Is(err, tc.expectedErr) {
+					t.Errorf("Expected error: %v, but got: %v", tc.expectedErr, err)
+				}
 			}
 		})
 	}
 }
 
 func TestNFSGetExports(t *testing.T) {
-
 	err := os.MkdirAll("/noderoot/etc/", os.ModePerm)
 	if err != nil {
 		t.Fatal(err)
@@ -246,6 +333,57 @@ func TestNFSPing(t *testing.T) {
 			NfsExportDirectory = "export"
 			_, _ = tc.nfs.Ping(context.Background(), tc.request)
 			tc.deleteExportFile(file)
+		})
+	}
+}
+
+func TestStartNfsServiceServer(t *testing.T) {
+	tests := []struct {
+		name      string
+		listenErr error
+		serveErr  error
+		wantErr   bool
+	}{
+		{
+			name:      "Successful startNfsServiceServer",
+			listenErr: nil,
+			serveErr:  nil,
+			wantErr:   false,
+		},
+		{
+			name:      "Error with ListenFunc",
+			listenErr: fmt.Errorf("error with ListenFunc"),
+			serveErr:  nil,
+			wantErr:   true,
+		},
+		{
+			name:      "Error with ServeFunc",
+			listenErr: nil,
+			serveErr:  fmt.Errorf("error with ServeFunc"),
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			listenFunc := func(network, address string) (net.Listener, error) {
+				if tt.listenErr != nil {
+					return nil, tt.listenErr
+				}
+				return &mockListener{}, nil
+			}
+			serveFunc := func(s *grpc.Server, lis net.Listener) error {
+				if tt.serveErr != nil {
+					return tt.serveErr
+				}
+				return nil
+			}
+			err := startNfsServiceServer("127.0.0.1", "9090", listenFunc, serveFunc)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }

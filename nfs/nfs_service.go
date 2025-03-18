@@ -34,6 +34,9 @@ import (
 	"github.com/dell/csm-hbnfs/nfs/proto"
 )
 
+type ListenFunc func(network, address string) (net.Listener, error)
+type ServeFunc func(s *grpc.Server, lis net.Listener) error
+
 type nfsServer struct {
 	proto.UnimplementedNfsServer
 	executor  Executor
@@ -67,9 +70,9 @@ func getServerPort() string {
 }
 
 // Starts an NFS server on the specified string port
-func startNfsServiceServer(ipAddress, port string) error {
+func startNfsServiceServer(ipAddress, port string, listenFunc ListenFunc, serveFunc ServeFunc) error {
 	log.Infof("csinfs: Calling Listen on %s", ipAddress+":"+port)
-	lis, err := net.Listen("tcp", ipAddress+":"+port)
+	lis, err := listenFunc(ipAddress, port)
 	if err != nil {
 		log.Infof("csinfs: Listen on ip:port %s:%s failed: %s", ipAddress, port, err.Error())
 		return err
@@ -77,7 +80,7 @@ func startNfsServiceServer(ipAddress, port string) error {
 	grpcServer := grpc.NewServer()
 	log.Infof("csinfs: Calling RegisterNfsServer")
 	proto.RegisterNfsServer(grpcServer, &nfsServer{})
-	if err := grpcServer.Serve(lis); err != nil {
+	if err := serveFunc(grpcServer, lis); err != nil {
 		log.Errorf("csinfs: grpcServer.Serve failed: %s", err.Error())
 		return err
 	}
@@ -390,4 +393,12 @@ func (nfs *nfsServer) UnexportMultipleNfsVolumes(ctx context.Context,
 	resp.UnsuccessfulIds = unsuccessful
 	resp.ExportNfsContext = req.ExportNfsContext
 	return resp, lastError
+}
+
+func listen(ipAddress string, port string) (net.Listener, error) {
+	return net.Listen("tcp", ipAddress+":"+port)
+}
+
+func serve(grpcServer *grpc.Server, lis net.Listener) error {
+	return grpcServer.Serve(lis)
 }
