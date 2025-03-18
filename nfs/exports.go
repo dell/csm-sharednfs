@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -37,6 +36,11 @@ var (
 	generation       int64 // variable updated for each change
 	syncedGeneration int64 // the last synced generations
 	savedUpdates     int64 // the number of saved updates
+	retrySleep       = 10 * time.Second
+	waitTime         = 30 * time.Second
+	exportsDir       = "/noderoot/etc/"
+	exportsFile      = "exports"
+	pathToExports    = exportsDir + exportsFile
 )
 
 const (
@@ -57,13 +61,13 @@ func CheckExport(directory string) (bool, error) {
 }
 
 func checkExport(directory string) (bool, error) {
-	file, err := os.Open("/noderoot/etc/exports")
+	file, err := os.Open(pathToExports)
 	if err != nil {
-		return false, fmt.Errorf("failed to open /noderoot/etc/exports: %v", err)
+		return false, fmt.Errorf("failed to open %s: %v", pathToExports, err)
 	}
 	defer file.Close()
 
-	scanner := bufio.NewScanner(file)
+	scanner := GetBufioScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if strings.HasPrefix(line, directory) {
@@ -72,7 +76,7 @@ func checkExport(directory string) (bool, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return false, fmt.Errorf("error reading /noderoot/etc/exports: %v", err)
+		return false, fmt.Errorf("error reading %s: %v", exportsDir, err)
 	}
 
 	return false, nil
@@ -82,13 +86,13 @@ func checkExport(directory string) (bool, error) {
 func GetExport(directory string) (string, error) {
 	exportsLock.Lock()
 	defer exportsLock.Unlock()
-	file, err := os.Open("/noderoot/etc/exports")
+	file, err := os.Open(pathToExports)
 	if err != nil {
-		return "", fmt.Errorf("failed to open /noderoot/etc/exports: %v", err)
+		return "", fmt.Errorf("failed to open %s: %v", exportsDir, err)
 	}
 	defer file.Close()
 
-	scanner := bufio.NewScanner(file)
+	scanner := GetBufioScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if strings.HasPrefix(line, directory) {
@@ -97,7 +101,7 @@ func GetExport(directory string) (string, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return "", fmt.Errorf("error reading /noderoot/etc/exports: %v", err)
+		return "", fmt.Errorf("error reading %s: %v", exportsDir, err)
 	}
 
 	return "", fmt.Errorf("no export entry found for %s", directory)
@@ -108,14 +112,14 @@ func GetExports(prefix string) ([]string, error) {
 	exportsLock.Lock()
 	defer exportsLock.Unlock()
 
-	file, err := os.Open("/noderoot/etc/exports")
+	file, err := os.Open(pathToExports)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
 	var matches []string
-	scanner := bufio.NewScanner(file)
+	scanner := GetBufioScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, prefix) {
@@ -126,6 +130,10 @@ func GetExports(prefix string) ([]string, error) {
 		return nil, err
 	}
 	return matches, nil
+}
+
+var GetBufioScanner = func(file *os.File) *bufio.Scanner {
+	return bufio.NewScanner(file)
 }
 
 // AddExport adds an export entry for the given directory to /noderoot/etc/exports.
@@ -140,15 +148,15 @@ func AddExport(directory, options string) (int64, error) {
 		return generation, fmt.Errorf("export entry for %s already exists", directory)
 	}
 
-	file, err := os.OpenFile("/noderoot/etc/exports", os.O_APPEND|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(pathToExports, os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
-		return generation, fmt.Errorf("failed to open /noderoot/etc/exports: %v", err)
+		return generation, fmt.Errorf("failed to open %s: %v", exportsDir, err)
 	}
 	defer file.Close()
 
 	entry := fmt.Sprintf("%s %s\n", directory, options)
 	if _, err := file.WriteString(entry); err != nil {
-		return generation, fmt.Errorf("failed to write to /noderoot/etc/exports: %v", err)
+		return generation, fmt.Errorf("failed to write to %s: %v", exportsDir, err)
 	}
 	log.Infof("AddExport %s %s completed", directory, options)
 	generation = generation + 1
@@ -159,13 +167,13 @@ func AddExport(directory, options string) (int64, error) {
 func DeleteExport(directory string) (int64, error) {
 	exportsLock.Lock()
 	defer exportsLock.Unlock()
-	file1, err := os.Open("/noderoot/etc/exports")
+	file1, err := os.Open(pathToExports)
 	if err != nil {
-		return generation, fmt.Errorf("failed to open /noderoot/etc/exports: %v", err)
+		return generation, fmt.Errorf("failed to open %s: %v", exportsDir, err)
 	}
 
 	var lines []string
-	scanner := bufio.NewScanner(file1)
+	scanner := GetBufioScanner(file1)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if !strings.HasPrefix(line, directory) {
@@ -175,19 +183,19 @@ func DeleteExport(directory string) (int64, error) {
 
 	if err := scanner.Err(); err != nil {
 		file1.Close()
-		return generation, fmt.Errorf("error reading /noderoot/etc/exports: %v", err)
+		return generation, fmt.Errorf("error reading %s: %v", exportsDir, err)
 	}
 	file1.Close()
 
-	file2, err := os.OpenFile("/noderoot/etc/exports", os.O_TRUNC|os.O_WRONLY, 0644)
+	file2, err := os.OpenFile(pathToExports, os.O_TRUNC|os.O_WRONLY, 0o644)
 	if err != nil {
-		return generation, fmt.Errorf("failed to open /noderoot/etc/exports: %v", err)
+		return generation, fmt.Errorf("failed to open %s: %v", exportsDir, err)
 	}
 
 	for _, line := range lines {
 		if _, err := file2.WriteString(line + "\n"); err != nil {
 			file2.Close()
-			return generation, fmt.Errorf("failed to write to /noderoot/etc/exports: %v", err)
+			return generation, fmt.Errorf("failed to write to %s: %v", exportsDir, err)
 		}
 	}
 	file2.Close()
@@ -202,14 +210,12 @@ func restartNFSMountd() error {
 	exportsLock.Lock()
 	defer exportsLock.Unlock()
 	log.Infof("restarting nfs-mountd")
-	cmd := exec.Command("chroot", "/noderoot", "container-systemctl", "restart", "nfs-mountd")
-	output, err := cmd.CombinedOutput()
+	output, err := GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "container-systemctl", "restart", "nfs-mountd")
 	if err != nil {
 		return fmt.Errorf("failed to restart nfs-mountd: %v, output: %s", err, string(output))
 	}
 
 	// Wait for nfs-mountd to be up, with a timeout of 60 seconds
-	waitTime := 30 * time.Second
 	timeout := time.After(waitTime)
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
@@ -230,8 +236,7 @@ func restartNFSMountd() error {
 
 // isNfsMountdActive checks if the nfs-mountd service is active
 func isNfsMountdActive() bool {
-	cmd := exec.Command("chroot", "/noderoot", "container-systemctl", "is-active", "--quiet", "nfs-mountd")
-	err := cmd.Run()
+	_, err := GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "container-systemctl", "is-active", "--quiet", "nfs-mountd")
 	return err == nil
 }
 
@@ -350,16 +355,20 @@ func ResyncNFSMountd(generation int64) error {
 		return nil
 	}
 	var err error
+	var output []byte
 	for retries := 0; retries < 2; retries++ {
-		cmd := exec.Command(chroot, noderoot, exportfs, "-r", "-a")
-		output, err := cmd.CombinedOutput()
+		output, err = GetLocalExecutor().ExecuteCommand(chroot, noderoot, exportfs, "-r", "-a")
 		if err == nil {
 			syncedGeneration = generation
-			log.Infof("resyncing to /noderoot/etc/exports successful %d", generation)
+			log.Infof("resyncing to %s successful %d", exportsDir, generation)
 			return nil
 		}
 		log.Infof("failed resyncing nfs-mountd: %v, retries: %d, output: %s", err, retries, string(output))
-		time.Sleep(10 * time.Second)
+		time.Sleep(retrySleep)
 	}
 	return err
+}
+
+var GetLocalExecutor = func() Executor {
+	return &LocalExecutor{}
 }

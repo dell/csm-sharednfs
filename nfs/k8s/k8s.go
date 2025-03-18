@@ -37,20 +37,29 @@ type K8sClient struct {
 	Clientset kubernetes.Interface
 }
 
+var NewForConfigFunc = func(config *rest.Config) (kubernetes.Interface, error) {
+	return kubernetes.NewForConfig(config)
+}
+
+var RestInClusterConfigFunc = func() (*rest.Config, error) {
+	return rest.InClusterConfig()
+}
+
 // Connect connect establishes a connection with the k8s API server.
 func Connect() (*K8sClient, error) {
 	k8sclient := new(K8sClient)
 	var err error
 	log.Info("csi-nfs: attempting k8sapi connection using InClusterConfig")
-	config, err := rest.InClusterConfig()
+	config, err := RestInClusterConfigFunc()
 	if err != nil {
 		return nil, err
 	}
-	k8sclient.Clientset, err = kubernetes.NewForConfig(config)
+	cs, err := NewForConfigFunc(config)
 	if err != nil {
 		log.Error("csi-nfs: unable to connect to k8sapi: " + err.Error())
 		return nil, err
 	}
+	k8sclient.Clientset = cs
 	log.Info("csi-nfs: connected to k8sapi")
 	return k8sclient, nil
 }
@@ -92,18 +101,19 @@ func (kc *K8sClient) GetPersistentVolume(ctx context.Context, name string) (*v1.
 }
 
 func (kc *K8sClient) GetNode(ctx context.Context, nodeName string) (*v1.Node, error) {
-	node, err := kc.Clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
-	return node, err
+	return kc.Clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 }
+
 
 // GetlEndpointSlices returns the endpointslices matching match labels.
 func (k *K8sClient) GetEndpointSlices(ctx context.Context, namespace, labelSelector string) ([]*discoveryv1.EndpointSlice, error) {
-	slices := make([]*discoveryv1.EndpointSlice, 0)
 	log.Infof("csi-nfs: retrieving all endpointslices")
 	sliceList, err := k.Clientset.DiscoveryV1().EndpointSlices(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
 	if err != nil {
 		log.Errorf("csi-nfs: error retrieving endpointslices: %s: %s", labelSelector, err.Error())
+		return nil, fmt.Errorf("csi-nfs: error retrieving endpointslices: %s: %s", labelSelector, err.Error())
 	}
+	slices := make([]*discoveryv1.EndpointSlice, 0)
 	for _, slice := range sliceList.Items {
 		slices = append(slices, &slice)
 	}
@@ -132,6 +142,7 @@ func (kc *K8sClient) GetNodeByCSINodeId(ctx context.Context, driverKey string, c
 	if err != nil {
 		return nil, fmt.Errorf("failed to list nodes: %w", err)
 	}
+
 	for _, node := range nodeList.Items {
 		if annotation, exists := node.Annotations["csi.volume.kubernetes.io/nodeid"]; exists {
 			var nodeIdMap map[string]string
