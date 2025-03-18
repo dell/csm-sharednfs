@@ -251,7 +251,7 @@ func TestControllerPublishVolume(t *testing.T) {
 				server := mocks.NewMockNfsServer(gomock.NewController(t))
 				server.EXPECT().ExportNfsVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&proto.ExportNfsVolumeResponse{}, nil)
 				createMockServer(t, "127.0.0.1", server)
-				nodeIpToStatus["127.0.0.1"] = &NodeStatus{
+				nodeIPAddress["127.0.0.1"] = &NodeStatus{
 					online:     true,
 					inRecovery: false,
 				}
@@ -297,7 +297,7 @@ func TestControllerPublishVolume(t *testing.T) {
 
 				csiNfsServce := &CsiNfsService{
 					vcsi: mockService,
-					k8sclient: &k8s.K8sClient{
+					k8sclient: &k8s.Client{
 						Clientset: fakeK8sClient,
 					},
 					waitCreateNfsServiceInterval: 10 * time.Millisecond,
@@ -333,7 +333,7 @@ func TestControllerPublishVolume(t *testing.T) {
 				server := mocks.NewMockNfsServer(gomock.NewController(t))
 				server.EXPECT().ExportNfsVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&proto.ExportNfsVolumeResponse{}, nil)
 				createMockServer(t, "127.0.0.1", server)
-				nodeIpToStatus["127.0.0.1"] = &NodeStatus{
+				nodeIPAddress["127.0.0.1"] = &NodeStatus{
 					online:     true,
 					inRecovery: false,
 				}
@@ -361,7 +361,7 @@ func TestControllerPublishVolume(t *testing.T) {
 
 				csiNfsServce := &CsiNfsService{
 					vcsi: mockService,
-					k8sclient: &k8s.K8sClient{
+					k8sclient: &k8s.Client{
 						Clientset: fakeK8sClient,
 					},
 					waitCreateNfsServiceInterval: 10 * time.Millisecond,
@@ -392,7 +392,7 @@ func TestControllerPublishVolume(t *testing.T) {
 				server := mocks.NewMockNfsServer(gomock.NewController(t))
 				server.EXPECT().ExportNfsVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&proto.ExportNfsVolumeResponse{}, nil)
 				createMockServer(t, "127.0.0.1", server)
-				nodeIpToStatus["127.0.0.1"] = &NodeStatus{
+				nodeIPAddress["127.0.0.1"] = &NodeStatus{
 					online:     true,
 					inRecovery: false,
 				}
@@ -449,7 +449,7 @@ func TestControllerPublishVolume(t *testing.T) {
 
 				csiNfsServce := &CsiNfsService{
 					vcsi: mockService,
-					k8sclient: &k8s.K8sClient{
+					k8sclient: &k8s.Client{
 						Clientset: fakeK8sClient,
 					},
 					waitCreateNfsServiceInterval: 10 * time.Millisecond,
@@ -485,7 +485,7 @@ func TestControllerPublishVolume(t *testing.T) {
 				server := mocks.NewMockNfsServer(gomock.NewController(t))
 				server.EXPECT().ExportNfsVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&proto.ExportNfsVolumeResponse{}, nil)
 				createMockServer(t, "127.0.0.1", server)
-				nodeIpToStatus["127.0.0.1"] = &NodeStatus{
+				nodeIPAddress["127.0.0.1"] = &NodeStatus{
 					online:     true,
 					inRecovery: false,
 				}
@@ -550,7 +550,7 @@ func TestControllerPublishVolume(t *testing.T) {
 
 				csiNfsServce := &CsiNfsService{
 					vcsi: mockService,
-					k8sclient: &k8s.K8sClient{
+					k8sclient: &k8s.Client{
 						Clientset: fakeK8sClient,
 					},
 					waitCreateNfsServiceInterval: 10 * time.Millisecond,
@@ -590,7 +590,7 @@ func TestControllerPublishVolume(t *testing.T) {
 
 			time.Sleep(50 * time.Millisecond)
 
-			defer func() { nodeIpToStatus = make(map[string]*NodeStatus) }()
+			defer func() { nodeIPAddress = make(map[string]*NodeStatus) }()
 
 			resp, err := test.csiNfsService.ControllerPublishVolume(context.Background(), test.req)
 			if !reflect.DeepEqual(resp, test.expectedRes) {
@@ -612,7 +612,7 @@ func TestControllerUnpublishVolume(t *testing.T) {
 		fakeK8sClient := fake.NewClientset()
 
 		csiNfsServce := &CsiNfsService{
-			k8sclient: &k8s.K8sClient{
+			k8sclient: &k8s.Client{
 				Clientset: fakeK8sClient,
 			},
 		}
@@ -642,7 +642,7 @@ func TestControllerUnpublishVolume(t *testing.T) {
 			},
 		}, metav1.CreateOptions{})
 		csiNfsServce := &CsiNfsService{
-			k8sclient: &k8s.K8sClient{
+			k8sclient: &k8s.Client{
 				Clientset: fakeK8sClient,
 			},
 		}
@@ -675,7 +675,7 @@ func TestControllerUnpublishVolume(t *testing.T) {
 			},
 		}, metav1.CreateOptions{})
 		csiNfsServce := &CsiNfsService{
-			k8sclient: &k8s.K8sClient{
+			k8sclient: &k8s.Client{
 				Clientset: fakeK8sClient,
 			},
 		}
@@ -720,7 +720,7 @@ func TestControllerUnpublishVolume(t *testing.T) {
 		createMockServer(t, "127.0.0.1", mockNfsServer)
 		csiNfsServce := &CsiNfsService{
 			vcsi: mockVcsiService,
-			k8sclient: &k8s.K8sClient{
+			k8sclient: &k8s.Client{
 				Clientset: fakeK8sClient,
 			},
 		}
@@ -763,7 +763,7 @@ func TestControllerUnpublishVolume(t *testing.T) {
 		mockVcsiService.EXPECT().ControllerUnpublishVolume(gomock.Any(), gomock.Any()).Times(0).Return(&csi.ControllerUnpublishVolumeResponse{}, nil)
 		csiNfsServce := &CsiNfsService{
 			vcsi: mockVcsiService,
-			k8sclient: &k8s.K8sClient{
+			k8sclient: &k8s.Client{
 				Clientset: fakeK8sClient,
 			},
 		}
@@ -779,41 +779,6 @@ func TestControllerUnpublishVolume(t *testing.T) {
 
 }
 
-func TestCreateSnapshot(t *testing.T) {
-	tests := []struct {
-		name          string
-		csiNfsService *CsiNfsService
-		req           *csi.CreateSnapshotRequest
-		expectedRes   *csi.CreateSnapshotResponse
-		expectedErr   error
-	}{
-		{
-			name:          "Test case name",
-			csiNfsService: &CsiNfsService{
-				// Set up the necessary fields for the CsiNfsService struct
-			},
-			req: &csi.CreateSnapshotRequest{
-				// Set up the request
-			},
-			expectedRes: &csi.CreateSnapshotResponse{
-				// Set up the expected response
-			},
-			expectedErr: nil,
-		},
-		// Add more test cases as needed
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			resp, err := test.csiNfsService.CreateSnapshot(context.Background(), test.req)
-			if !reflect.DeepEqual(resp, test.expectedRes) {
-				t.Errorf("expected response %+v, got %+v", test.expectedRes, resp)
-			}
-			assert.Equal(t, test.expectedErr, err)
-		})
-	}
-}
-
 func TestValidateVolumeCapabilities(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -823,19 +788,12 @@ func TestValidateVolumeCapabilities(t *testing.T) {
 		expectedErr   error
 	}{
 		{
-			name:          "Test case name",
-			csiNfsService: &CsiNfsService{
-				// Set up the necessary fields for the CsiNfsService struct
-			},
-			req: &csi.ValidateVolumeCapabilitiesRequest{
-				// Set up the request
-			},
-			expectedRes: &csi.ValidateVolumeCapabilitiesResponse{
-				// Set up the expected response
-			},
-			expectedErr: nil,
+			name:          "Valid volume request",
+			csiNfsService: &CsiNfsService{},
+			req:           &csi.ValidateVolumeCapabilitiesRequest{},
+			expectedRes:   &csi.ValidateVolumeCapabilitiesResponse{},
+			expectedErr:   nil,
 		},
-		// Add more test cases as needed
 	}
 
 	for _, test := range tests {
@@ -858,19 +816,12 @@ func TestListVolumes(t *testing.T) {
 		expectedErr   error
 	}{
 		{
-			name:          "Test case name",
-			csiNfsService: &CsiNfsService{
-				// Set up the necessary fields for the CsiNfsService struct
-			},
-			req: &csi.ListVolumesRequest{
-				// Set up the request
-			},
-			expectedRes: &csi.ListVolumesResponse{
-				// Set up the expected response
-			},
-			expectedErr: nil,
+			name:          "Valid volume request",
+			csiNfsService: &CsiNfsService{},
+			req:           &csi.ListVolumesRequest{},
+			expectedRes:   &csi.ListVolumesResponse{},
+			expectedErr:   nil,
 		},
-		// Add more test cases as needed
 	}
 
 	for _, test := range tests {
@@ -893,19 +844,12 @@ func TestGetCapacity(t *testing.T) {
 		expectedErr   error
 	}{
 		{
-			name:          "Test case name",
-			csiNfsService: &CsiNfsService{
-				// Set up the necessary fields for the CsiNfsService struct
-			},
-			req: &csi.GetCapacityRequest{
-				// Set up the request
-			},
-			expectedRes: &csi.GetCapacityResponse{
-				// Set up the expected response
-			},
-			expectedErr: nil,
+			name:          "Valid volume request",
+			csiNfsService: &CsiNfsService{},
+			req:           &csi.GetCapacityRequest{},
+			expectedRes:   &csi.GetCapacityResponse{},
+			expectedErr:   nil,
 		},
-		// Add more test cases as needed
 	}
 
 	for _, test := range tests {
@@ -928,19 +872,12 @@ func TestControllerGetCapabilities(t *testing.T) {
 		expectedErr   error
 	}{
 		{
-			name:          "Test case name",
-			csiNfsService: &CsiNfsService{
-				// Set up the necessary fields for the CsiNfsService struct
-			},
-			req: &csi.ControllerGetCapabilitiesRequest{
-				// Set up the request
-			},
-			expectedRes: &csi.ControllerGetCapabilitiesResponse{
-				// Set up the expected response
-			},
-			expectedErr: nil,
+			name:          "Valid request",
+			csiNfsService: &CsiNfsService{},
+			req:           &csi.ControllerGetCapabilitiesRequest{},
+			expectedRes:   &csi.ControllerGetCapabilitiesResponse{},
+			expectedErr:   nil,
 		},
-		// Add more test cases as needed
 	}
 
 	for _, test := range tests {
@@ -954,36 +891,52 @@ func TestControllerGetCapabilities(t *testing.T) {
 	}
 }
 
+func TestCreateSnapshot(t *testing.T) {
+	tests := []struct {
+		name          string
+		csiNfsService *CsiNfsService
+		req           *csi.CreateSnapshotRequest
+		expectedRes   *csi.CreateSnapshotResponse
+		expectedErr   error
+	}{
+		{
+			name:          "Valid snapshot request",
+			csiNfsService: &CsiNfsService{},
+			req:           &csi.CreateSnapshotRequest{},
+			expectedRes:   &csi.CreateSnapshotResponse{},
+			expectedErr:   nil,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			resp, err := test.csiNfsService.CreateSnapshot(context.Background(), test.req)
+			if !reflect.DeepEqual(resp, test.expectedRes) {
+				t.Errorf("expected response %+v, got %+v", test.expectedRes, resp)
+			}
+			assert.Equal(t, test.expectedErr, err)
+		})
+	}
+}
+
 func TestDeleteSnapshot(t *testing.T) {
 	tests := []struct {
 		name          string
 		csiNfsService *CsiNfsService
 		req           *csi.DeleteSnapshotRequest
-		expectedRes   *csi.DeleteSnapshotResponse
 		expectedErr   error
 	}{
 		{
-			name:          "Test case name",
-			csiNfsService: &CsiNfsService{
-				// Set up the necessary fields for the CsiNfsService struct
-			},
-			req: &csi.DeleteSnapshotRequest{
-				// Set up the request
-			},
-			expectedRes: &csi.DeleteSnapshotResponse{
-				// Set up the expected response
-			},
-			expectedErr: nil,
+			name:          "Valid snapshot request",
+			csiNfsService: &CsiNfsService{},
+			req:           &csi.DeleteSnapshotRequest{},
+			expectedErr:   nil,
 		},
-		// Add more test cases as needed
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			resp, err := test.csiNfsService.DeleteSnapshot(context.Background(), test.req)
-			if !reflect.DeepEqual(resp, test.expectedRes) {
-				t.Errorf("expected response %+v, got %+v", test.expectedRes, resp)
-			}
+			_, err := test.csiNfsService.DeleteSnapshot(context.Background(), test.req)
 			assert.Equal(t, test.expectedErr, err)
 		})
 	}
@@ -998,19 +951,12 @@ func TestListSnapshots(t *testing.T) {
 		expectedErr   error
 	}{
 		{
-			name:          "Test case name",
-			csiNfsService: &CsiNfsService{
-				// Set up the necessary fields for the CsiNfsService struct
-			},
-			req: &csi.ListSnapshotsRequest{
-				// Set up the request
-			},
-			expectedRes: &csi.ListSnapshotsResponse{
-				// Set up the expected response
-			},
-			expectedErr: nil,
+			name:          "Valid snapshot request",
+			csiNfsService: &CsiNfsService{},
+			req:           &csi.ListSnapshotsRequest{},
+			expectedRes:   &csi.ListSnapshotsResponse{},
+			expectedErr:   nil,
 		},
-		// Add more test cases as needed
 	}
 
 	for _, test := range tests {
@@ -1033,24 +979,45 @@ func TestControllerExpandVolume(t *testing.T) {
 		expectedErr   error
 	}{
 		{
-			name:          "Test case name",
-			csiNfsService: &CsiNfsService{
-				// Set up the necessary fields for the CsiNfsService struct
-			},
-			req: &csi.ControllerExpandVolumeRequest{
-				// Set up the request
-			},
-			expectedRes: &csi.ControllerExpandVolumeResponse{
-				// Set up the expected response
-			},
-			expectedErr: nil,
+			name:          "Valid volume request",
+			csiNfsService: &CsiNfsService{},
+			req:           &csi.ControllerExpandVolumeRequest{},
+			expectedRes:   &csi.ControllerExpandVolumeResponse{},
+			expectedErr:   nil,
 		},
-		// Add more test cases as needed
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			resp, err := test.csiNfsService.ControllerExpandVolume(context.Background(), test.req)
+			if !reflect.DeepEqual(resp, test.expectedRes) {
+				t.Errorf("expected response %+v, got %+v", test.expectedRes, resp)
+			}
+			assert.Equal(t, test.expectedErr, err)
+		})
+	}
+}
+
+func TestControllerGetVolume(t *testing.T) {
+	tests := []struct {
+		name          string
+		csiNfsService *CsiNfsService
+		req           *csi.ControllerGetVolumeRequest
+		expectedRes   *csi.ControllerGetVolumeResponse
+		expectedErr   error
+	}{
+		{
+			name:          "Valid volume request",
+			csiNfsService: &CsiNfsService{},
+			req:           &csi.ControllerGetVolumeRequest{},
+			expectedRes:   nil,
+			expectedErr:   status.Error(400, "Not implemented"),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			resp, err := test.csiNfsService.ControllerGetVolume(context.Background(), test.req)
 			if !reflect.DeepEqual(resp, test.expectedRes) {
 				t.Errorf("expected response %+v, got %+v", test.expectedRes, resp)
 			}

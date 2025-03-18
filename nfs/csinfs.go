@@ -48,16 +48,16 @@ type Service interface {
 }
 
 type CsiNfsService struct {
-	vcsi            Service
-	md              Service
-	provisionerName string
-	mode            string
-	nodeID          string
-	nodeIPAddress   string
-	podCIDR         string
-	nodeName        string
-	failureRetries  int
-	k8sclient                    *k8s.K8sClient
+	vcsi                         Service
+	md                           Service
+	provisionerName              string
+	mode                         string
+	nodeID                       string
+	nodeIPAddress                string
+	podCIDR                      string
+	nodeName                     string
+	failureRetries               int
+	k8sclient                    *k8s.Client
 	executor                     Executor
 	waitCreateNfsServiceInterval time.Duration
 }
