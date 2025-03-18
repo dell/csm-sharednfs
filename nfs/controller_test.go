@@ -147,7 +147,7 @@ func TestHighPriorityLockPV(t *testing.T) {
 
 			// Call the function
 			cs := &CsiNfsService{}
-			cs.HighPriorityLockPV(test.pvName, test.requestID)
+			cs.LockPV(test.pvName, test.requestID, true)
 
 			defer PVLock.Clear()
 
@@ -187,7 +187,7 @@ func TestLockPV(t *testing.T) {
 
 			// Call the function
 			cs := &CsiNfsService{}
-			cs.LockPV(test.pvName, test.requestID)
+			cs.LockPV(test.pvName, test.requestID, false)
 
 			defer PVLock.Clear()
 

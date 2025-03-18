@@ -96,9 +96,9 @@ func (s *CsiNfsService) nodeRecovery(nodeIP string) {
 func (s *CsiNfsService) reassignVolume(slice *discoveryv1.EndpointSlice) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), VolumeReassignTimeout)
 	defer cancel()
-	volumeID := slice.Annotations[DriverVolumeID]
-	s.HighPriorityLockPV(volumeID, "reassign")
-	defer s.UnlockPV(volumeID)
+	volumeId := slice.Annotations[DriverVolumeID]
+	s.LockPV(volumeId, "reassign", true)
+	defer s.UnlockPV(volumeId)
 
 	pvName := slice.Labels["pvName"]
 	startTime := time.Now()

@@ -72,22 +72,11 @@ func (cs *CsiNfsService) DeleteVolume(_ context.Context, _ *csi.DeleteVolumeRequ
 	return &csi.DeleteVolumeResponse{}, nil
 }
 
-func (cs *CsiNfsService) HighPriorityLockPV(name, requestID string) {
-	var logged bool
-	for {
-		holder, loaded := PVLock.LoadOrStore(name, requestID)
-		if !loaded {
-			break
-		}
-		if !logged {
-			log.Infof("%s Waiting on PVLock holder %s", requestID, holder)
-			logged = true
-		}
-		time.Sleep(200 * time.Millisecond)
+func (cs *CsiNfsService) LockPV(name, requestID string, highPriority bool) {
+	sleepTime := 3 * time.Second
+	if highPriority {
+		sleepTime = 200 * time.Millisecond
 	}
-}
-
-func (cs *CsiNfsService) LockPV(name, requestID string) {
 	var logged bool
 	for {
 		holder, loaded := PVLock.LoadOrStore(name, requestID)
@@ -98,7 +87,7 @@ func (cs *CsiNfsService) LockPV(name, requestID string) {
 			log.Infof("%s waiting on PVLock holder %s", requestID, holder)
 			logged = true
 		}
-		time.Sleep(3 * time.Second)
+		time.Sleep(sleepTime)
 	}
 }
 
@@ -138,7 +127,7 @@ func (cs *CsiNfsService) ControllerPublishVolume(ctx context.Context,
 	log.Infof("Entered nfs ControllerPublishVolume %s %s %+v", name, req.VolumeId, req)
 
 	// Get lock for concurrency
-	cs.LockPV(req.VolumeId, requestID)
+	cs.LockPV(req.VolumeId, requestID, false)
 	defer cs.UnlockPV(req.VolumeId)
 
 	// Read the PV. This is necessary from which to determine the namespace.
@@ -446,7 +435,7 @@ func (cs *CsiNfsService) ControllerUnpublishVolume(ctx context.Context, req *csi
 	resp := &csi.ControllerUnpublishVolumeResponse{}
 
 	// Get lock for concurrency
-	cs.LockPV(req.VolumeId, requestID)
+	cs.LockPV(req.VolumeId, requestID, false)
 	defer cs.UnlockPV(req.VolumeId)
 
 	service, slice, err := cs.getServiceAndSlice(ctx, serviceName)
