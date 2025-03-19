@@ -109,9 +109,7 @@ func getNfsClient(ipaddress, port string) (proto.NfsClient, error) {
 // TODO: Add cleanup
 func deleteNfsClient(_ string) {}
 
-var (
-	nfsPVLock sync.Map
-)
+var nfsPVLock sync.Map
 
 func (nfs *nfsServer) nfsLockPV(requestID string) {
 	for {
