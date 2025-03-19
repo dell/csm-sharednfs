@@ -41,11 +41,12 @@ var (
 	exportsDir       = "/noderoot/etc/"
 	exportsFile      = "exports"
 	pathToExports    = exportsDir + exportsFile
+	nodeRoot         = "/noderoot"
 )
 
 const (
-	chroot   = "chroot"
-	noderoot = "/noderoot"
+	chroot = "chroot"
+	// noderoot = "/noderoot"
 	exportfs = "/usr/sbin/exportfs"
 )
 
@@ -61,7 +62,7 @@ func CheckExport(directory string) (bool, error) {
 }
 
 func checkExport(directory string) (bool, error) {
-	file, err := os.Open(pathToExports)
+	file, err := opSys.Open(pathToExports)
 	if err != nil {
 		return false, fmt.Errorf("failed to open %s: %v", pathToExports, err)
 	}
@@ -86,7 +87,7 @@ func checkExport(directory string) (bool, error) {
 func GetExport(directory string) (string, error) {
 	exportsLock.Lock()
 	defer exportsLock.Unlock()
-	file, err := os.Open(pathToExports)
+	file, err := opSys.Open(pathToExports)
 	if err != nil {
 		return "", fmt.Errorf("failed to open %s: %v", exportsDir, err)
 	}
@@ -112,7 +113,7 @@ func GetExports(prefix string) ([]string, error) {
 	exportsLock.Lock()
 	defer exportsLock.Unlock()
 
-	file, err := os.Open(pathToExports)
+	file, err := opSys.Open(pathToExports)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +149,7 @@ func AddExport(directory, options string) (int64, error) {
 		return generation, fmt.Errorf("export entry for %s already exists", directory)
 	}
 
-	file, err := os.OpenFile(pathToExports, os.O_APPEND|os.O_WRONLY, 0o644)
+	file, err := opSys.OpenFile(pathToExports, os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return generation, fmt.Errorf("failed to open %s: %v", exportsDir, err)
 	}
@@ -167,7 +168,7 @@ func AddExport(directory, options string) (int64, error) {
 func DeleteExport(directory string) (int64, error) {
 	exportsLock.Lock()
 	defer exportsLock.Unlock()
-	file1, err := os.Open(pathToExports)
+	file1, err := opSys.Open(pathToExports)
 	if err != nil {
 		return generation, fmt.Errorf("failed to open %s: %v", exportsDir, err)
 	}
@@ -187,7 +188,7 @@ func DeleteExport(directory string) (int64, error) {
 	}
 	file1.Close()
 
-	file2, err := os.OpenFile(pathToExports, os.O_TRUNC|os.O_WRONLY, 0o644)
+	file2, err := opSys.OpenFile(pathToExports, os.O_TRUNC|os.O_WRONLY, 0o644)
 	if err != nil {
 		return generation, fmt.Errorf("failed to open %s: %v", exportsDir, err)
 	}
@@ -240,110 +241,6 @@ func isNfsMountdActive() bool {
 	return err == nil
 }
 
-// AddExport adds a new NFS export.
-// func AddExport(directory, clientOptions string) error {
-// 	exportsLock.Lock()
-// 	defer exportsLock.Unlock()
-
-// 	cmd := exec.Command(exportfs, "-o", clientOptions, fmt.Sprintf(":%s", directory))
-// 	//cmd := exec.Command(chroot, noderoot, "exportfs", "-o", clientOptions, fmt.Sprintf(":%s", directory))
-// 	var stderr bytes.Buffer
-// 	cmd.Stderr = &stderr
-
-// 	if err := cmd.Run(); err != nil {
-// 		return fmt.Errorf("failed to add export: %v, %s", err, stderr.String())
-// 	}
-// 	log.Infof("AddExport succeeded %s %s", directory, clientOptions)
-// 	return nil
-// }
-
-// UpdateExport updates an existing NFS export.
-// func UpdateExport(directory, clientOptions string) error {
-// 	// Updating is essentially removing and then adding the export with new options
-// 	if err := RemoveExport(directory); err != nil {
-// 		return err
-// 	}
-// 	return AddExport(directory, clientOptions)
-// }
-
-// RemoveExport removes an existing NFS export.
-// func RemoveExport(directory string) error {
-// 	exportsLock.Lock()
-// 	defer exportsLock.Unlock()
-
-// 	cmd := exec.Command(exportfs, "-u", fmt.Sprintf(":%s", directory))
-// 	///cmd := exec.Command(chroot, noderoot, "exportfs", "-u", fmt.Sprintf(":%s", directory))
-// 	var stderr bytes.Buffer
-// 	cmd.Stderr = &stderr
-
-// 	if err := cmd.Run(); err != nil {
-// 		return fmt.Errorf("failed to remove export: %v, %s", err, stderr.String())
-// 	}
-// 	log.Infof("RemoveExport succeeded %s", directory)
-// 	return nil
-// }
-
-// // FindExport checks if a directory is exported.
-// func FindExport(directory string) (bool, error) {
-// 	exportsLock.Lock()
-// 	defer exportsLock.Unlock()
-
-// 	cmd := exec.Command("exportfs")
-// 	var out bytes.Buffer
-// 	cmd.Stdout = &out
-
-// 	if err := cmd.Run(); err != nil {
-// 		return false, fmt.Errorf("failed to list exports: %v", err)
-// 	}
-
-// 	exports := out.String()
-// 	return strings.Contains(exports, directory), nil
-// }
-
-// GetExport retrieves the export details for a specific directory.
-// func GetExport(directory string) (string, error) {
-// 	exportsLock.Lock()
-// 	defer exportsLock.Unlock()
-
-// 	cmd := exec.Command(exportfs)
-// 	//cmd := exec.Command(chroot, noderoot, "exportfs")
-// 	var out bytes.Buffer
-// 	cmd.Stdout = &out
-
-// 	if err := cmd.Run(); err != nil {
-// 		return "", fmt.Errorf("failed to list exports: %v", err)
-// 	}
-
-// 	exports := strings.Split(out.String(), "\n")
-// 	for _, export := range exports {
-// 		if strings.Contains(export, directory) {
-// 			log.Infof("GetExport returned %s", export)
-// 			return export, nil
-// 		}
-// 	}
-
-// 	return "", fmt.Errorf("export for directory %s not found", directory)
-// }
-
-// GetAllExports returns a list of all current NFS exports.
-// func GetAllExports() ([]string, error) {
-// 	exportsLock.Lock()
-// 	defer exportsLock.Unlock()
-
-// 	cmd := exec.Command(exportfs)
-// 	//cmd := exec.Command(chroot, noderoot, "exportfs")
-// 	var out bytes.Buffer
-// 	cmd.Stdout = &out
-
-// 	if err := cmd.Run(); err != nil {
-// 		return nil, fmt.Errorf("failed to list exports: %v", err)
-// 	}
-
-// 	exports := strings.Split(out.String(), "\n")
-// 	log.Infof("GetAllExports returned %v", exports)
-// 	return exports, nil
-// }
-
 // RestartNFSMountd doesn't actually restart the server.
 // Instead it issues the exportfs -r command resync the kernel NFS with /noderoot/etc/exports.
 func ResyncNFSMountd(generation int64) error {
@@ -357,7 +254,7 @@ func ResyncNFSMountd(generation int64) error {
 	var err error
 	var output []byte
 	for retries := 0; retries < 2; retries++ {
-		output, err = GetLocalExecutor().ExecuteCommand(chroot, noderoot, exportfs, "-r", "-a")
+		output, err = GetLocalExecutor().ExecuteCommand(chroot, nodeRoot, exportfs, "-r", "-a")
 		if err == nil {
 			syncedGeneration = generation
 			log.Infof("resyncing to %s successful %d", exportsDir, generation)

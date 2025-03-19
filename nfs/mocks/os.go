@@ -11,6 +11,7 @@ package mocks
 
 import (
 	fs "io/fs"
+	os "os"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
@@ -40,6 +41,34 @@ func (m *MockOSInterface) EXPECT() *MockOSInterfaceMockRecorder {
 	return m.recorder
 }
 
+// Chmod mocks base method.
+func (m *MockOSInterface) Chmod(arg0 string, arg1 fs.FileMode) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Chmod", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Chmod indicates an expected call of Chmod.
+func (mr *MockOSInterfaceMockRecorder) Chmod(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Chmod", reflect.TypeOf((*MockOSInterface)(nil).Chmod), arg0, arg1)
+}
+
+// Chown mocks base method.
+func (m *MockOSInterface) Chown(arg0 string, arg1, arg2 int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Chown", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Chown indicates an expected call of Chown.
+func (mr *MockOSInterfaceMockRecorder) Chown(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Chown", reflect.TypeOf((*MockOSInterface)(nil).Chown), arg0, arg1, arg2)
+}
+
 // Getenv mocks base method.
 func (m *MockOSInterface) Getenv(arg0 string) string {
 	m.ctrl.T.Helper()
@@ -66,6 +95,36 @@ func (m *MockOSInterface) MkdirAll(arg0 string, arg1 fs.FileMode) error {
 func (mr *MockOSInterfaceMockRecorder) MkdirAll(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MkdirAll", reflect.TypeOf((*MockOSInterface)(nil).MkdirAll), arg0, arg1)
+}
+
+// Open mocks base method.
+func (m *MockOSInterface) Open(arg0 string) (*os.File, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Open", arg0)
+	ret0, _ := ret[0].(*os.File)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Open indicates an expected call of Open.
+func (mr *MockOSInterfaceMockRecorder) Open(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Open", reflect.TypeOf((*MockOSInterface)(nil).Open), arg0)
+}
+
+// OpenFile mocks base method.
+func (m *MockOSInterface) OpenFile(arg0 string, arg1 int, arg2 fs.FileMode) (*os.File, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "OpenFile", arg0, arg1, arg2)
+	ret0, _ := ret[0].(*os.File)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// OpenFile indicates an expected call of OpenFile.
+func (mr *MockOSInterfaceMockRecorder) OpenFile(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OpenFile", reflect.TypeOf((*MockOSInterface)(nil).OpenFile), arg0, arg1, arg2)
 }
 
 // Stat mocks base method.

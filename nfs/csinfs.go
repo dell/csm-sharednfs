@@ -74,6 +74,14 @@ type OSInterface interface {
 	Getenv(string) string
 	// os.MkdirAll()
 	MkdirAll(string, os.FileMode) error
+	// os.Open()
+	Open(string) (*os.File, error)
+	// os.OpenFile()
+	OpenFile(string, int, os.FileMode) (*os.File, error)
+	// os.Chown()
+	Chown(string, int, int) error
+	// os.Chmod()
+	Chmod(string, os.FileMode) error
 }
 
 type OSImpl struct{}
@@ -90,6 +98,22 @@ func (o *OSImpl) Getenv(envName string) string {
 
 func (o *OSImpl) MkdirAll(fileName string, perm os.FileMode) error {
 	return os.MkdirAll(fileName, perm)
+}
+
+func (o *OSImpl) Open(fileName string) (*os.File, error) {
+	return os.Open(fileName)
+}
+
+func (o *OSImpl) OpenFile(fileName string, flag int, perm os.FileMode) (*os.File, error) {
+	return os.OpenFile(fileName, flag, perm)
+}
+
+func (o *OSImpl) Chown(fileName string, uid, gid int) error {
+	return os.Chown(fileName, uid, gid)
+}
+
+func (o *OSImpl) Chmod(fileName string, mode os.FileMode) error {
+	return os.Chmod(fileName, mode)
 }
 
 func IsNFSStorageClass(parameters map[string]string) bool {
@@ -293,7 +317,7 @@ func (s *CsiNfsService) BeforeServe(ctx context.Context, _ *gocsi.StoragePlugin,
 	// Start the NFS server listener
 	// TODO: make port configurable from environment
 	go func() {
-		err := startNfsServiceServer(s.nodeIPAddress, getServerPort())
+		err := startNfsServiceServer(s.nodeIPAddress, getServerPort(), listen, serve)
 		if err != nil {
 			log.Errorf("failed to start nfs service. err: %s", err.Error())
 		}

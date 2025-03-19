@@ -628,7 +628,7 @@ func TestResyncNFSMountd(t *testing.T) {
 				return me
 			}
 			retrySleep = 10 * time.Millisecond
-			me.EXPECT().ExecuteCommand(chroot, noderoot, exportfs, "-r", "-a").Return(tt.mockReturn, tt.mockError).AnyTimes()
+			me.EXPECT().ExecuteCommand(chroot, nodeRoot, exportfs, "-r", "-a").Return(tt.mockReturn, tt.mockError).AnyTimes()
 
 			if tt.resyncg != 0 {
 				syncedGeneration = tt.resyncg
@@ -776,6 +776,10 @@ func TestRestartNFSMountd(t *testing.T) {
 			waitTime = tt.wait
 			me.EXPECT().ExecuteCommand("chroot", "/noderoot", "container-systemctl", "restart", "nfs-mountd").Return(tt.mockReturn, tt.mockRestartNFSError)
 			me.EXPECT().ExecuteCommand("chroot", "/noderoot", "container-systemctl", "is-active", "--quiet", "nfs-mountd").Return(tt.mockReturn, tt.mockIsNFSActiveError).AnyTimes()
+
+			GetLocalExecutor = func() Executor {
+				return me
+			}
 
 			err := restartNFSMountd()
 			if err != nil {
