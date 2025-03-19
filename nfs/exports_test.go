@@ -733,10 +733,6 @@ func TestDeleteExport(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				// _, err = file.WriteString(fmt.Sprintf("%s\n", "dummy-entry"))
-				// if err != nil {
-				// 	t.Fatal(err)
-				// }
 
 				file.Close()
 
