@@ -184,7 +184,10 @@ func (cs *CsiNfsService) ControllerPublishVolume(ctx context.Context,
 	}
 	if endpoint != nil && service != nil {
 		log.Infof("Calling addNodeToNfsService %s %s", service.Name, endpoint)
-		cs.addNodeToNfsService(ctx, service, req)
+		service, err = cs.addNodeToNfsService(ctx, service, req)
+		if err != nil {
+			log.Infof("addNodeToNfsService failed %+v error %s", service, err)
+		}
 		return resp, err
 	}
 
@@ -363,7 +366,10 @@ func (cs *CsiNfsService) addNodeToNfsService(ctx context.Context, service *corev
 	nodeID := req.NodeId
 	if service.Labels["client/"+nodeID] == "" {
 		service.Labels["client/"+nodeID] = nodeID
-		cs.k8sclient.UpdateService(ctx, service.Namespace, service)
+		_, err := cs.k8sclient.UpdateService(ctx, service.Namespace, service)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return service, nil
 }

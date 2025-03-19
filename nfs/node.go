@@ -23,7 +23,6 @@ import (
 	"time"
 
 	//"os"
-	"os/exec"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	log "github.com/sirupsen/logrus"
@@ -97,8 +96,9 @@ func (ns *CsiNfsService) nodePublishVolume(ctx context.Context, req *csi.NodePub
 	if err != nil {
 		log.Errorf("Target path %s not created: %s ... proceeding anyway: %s \n", target, err, string(output))
 		// Unmount the target directory
-		cmd := exec.Command("umount", target)
-		out, err := cmd.CombinedOutput()
+		// cmd := exec.Command("umount", target)
+		// out, err := cmd.CombinedOutput()
+		out, err := ns.executor.ExecuteCommand("umount", target)
 		log.Infof("csi-nfs NodeUnpublish %s umount target error: %v:\n%s", target, err, string(out))
 	}
 

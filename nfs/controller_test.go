@@ -170,6 +170,7 @@ func TestLockPV(t *testing.T) {
 	tests := []struct {
 		name        string
 		pvName      string
+		init        func()
 		requestID   string
 		expectedLog string
 	}{
@@ -177,6 +178,18 @@ func TestLockPV(t *testing.T) {
 			name:      "Acquire lock",
 			pvName:    "test-pv",
 			requestID: "test-request",
+		},
+		{
+			name:      "Acquire lock",
+			pvName:    "test-pv",
+			requestID: "test-request",
+			init: func() {
+				// t.Logf("Locking test-pv")
+				PVLock.Store("test-pv", "test-request")
+				defer PVLock.Clear()
+				time.Sleep(2 * time.Second)
+				// t.Logf("Unlocking test-pv")
+			},
 		},
 	}
 
@@ -188,7 +201,12 @@ func TestLockPV(t *testing.T) {
 
 			// Call the function
 			cs := &CsiNfsService{}
-			cs.LockPV(test.pvName, test.requestID, false)
+
+			if test.init != nil {
+				go test.init()
+			}
+			time.Sleep(1 * time.Second)
+			cs.LockPV(test.pvName, test.requestID, true)
 
 			defer PVLock.Clear()
 

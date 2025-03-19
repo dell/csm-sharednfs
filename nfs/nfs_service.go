@@ -162,15 +162,18 @@ func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsV
 	}
 
 	log.Infof("Calling chroot chmod %s %o", path, NfsFileMode)
-	output, err := nfs.executor.ExecuteCommand("chroot", "/noderoot", "chmod", NfsFileModeString, path)
+	out, err := GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "chmod", NfsFileModeString, path)
+	// cmd := exec.Command("chroot", "/noderoot", "chmod", NfsFileModeString, path)
+	// output, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Errorf("failed chroot chmod output: %s %s", err, string(output))
+		log.Errorf("failed chroot chmod output: %s %s", err, string(out))
 		return resp, err
 	}
 
 	// Read the directory entry for the path (debug)
-	output, _ = nfs.executor.ExecuteCommand("chroot", "/noderoot", "ls", "-ld", path)
-	log.Infof("ls -ld %s:\n %s", path, string(output))
+	out, err = GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "ls", "-ld", path)
+	// output, _ = cmd.CombinedOutput()
+	log.Infof("ls -ld %s:\n %s", path, string(out))
 
 	// Add entry in /etc/exports
 	options := fmt.Sprintf("(rw)")
@@ -250,7 +253,11 @@ func (nfs *nfsServer) UnexportNfsVolume(ctx context.Context, req *proto.Unexport
 		}
 		// Restart the nfs-mountd. It may be out of sync.
 		log.Infof("restarting the NFS service as it may be out of sync")
-		restartNFSMountd()
+		err = restartNFSMountd()
+		if err != nil {
+			log.Errorf("restartNFSMountd returned error %s", err)
+			return resp, err
+		}
 		log.Errorf("UnmountVolume %s retry %d returned error %s", exportPath, i, err)
 	}
 	if err != nil {
