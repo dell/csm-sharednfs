@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -101,19 +102,11 @@ func (o *OSImpl) MkdirAll(fileName string, perm os.FileMode) error {
 }
 
 func (o *OSImpl) Open(fileName string) (*os.File, error) {
-	file, err := opSys.Open(fileName)
-	if err != nil {
-		return nil, err
-	}
-	return file, err
+	return os.Open(filepath.Clean(fileName))
 }
 
 func (o *OSImpl) OpenFile(fileName string, flag int, perm os.FileMode) (*os.File, error) {
-	file, err := opSys.OpenFile(fileName, flag, perm)
-	if err != nil {
-		return nil, err
-	}
-	return file, nil
+	return os.OpenFile(filepath.Clean(fileName), flag, perm)
 }
 
 func (o *OSImpl) Chown(fileName string, uid, gid int) error {
