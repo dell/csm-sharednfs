@@ -243,8 +243,7 @@ func (cs *CsiNfsService) makeNfsService(ctx context.Context, namespace, name str
 
 	// Create the endpointslice
 	portName := "nfs-server"
-	var portNumber int32
-	portNumber = 2049
+	var portNumber int32 = 2049
 	endpointSlice := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,

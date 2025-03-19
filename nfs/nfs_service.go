@@ -18,7 +18,6 @@ package nfs
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -111,14 +110,13 @@ func getNfsClient(ipaddress, port string) (proto.NfsClient, error) {
 func deleteNfsClient(_ string) {}
 
 var (
-	exportNfsLock sync.Mutex // TBD not currently used remove if possible
-	nfsPVLock     sync.Map
+	nfsPVLock sync.Map
 )
 
 func (nfs *nfsServer) nfsLockPV(requestID string) {
 	for {
 		holder, loaded := nfsPVLock.LoadOrStore(requestID, requestID)
-		if loaded == false {
+		if !loaded {
 			break
 		}
 		log.Infof("Waiting on PVLock holder %s", holder)
@@ -170,10 +168,15 @@ func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsV
 
 	// Read the directory entry for the path (debug)
 	out, err = GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "ls", "-ld", path)
+	if err != nil {
+		log.Errorf("failed chroot output: %s %s", err, string(out))
+		return resp, err
+	}
+
 	log.Infof("ls -ld %s:\n %s", path, string(out))
 
 	// Add entry in /etc/exports
-	options := fmt.Sprintf("(rw)")
+	options := "(rw)"
 	optionsString := nfsService.podCIDR + options
 	// Add the link-local overlay network for OCP. TODO: add conditionally?
 	optionsString = optionsString + " 169.254.0.0/17(rw)"

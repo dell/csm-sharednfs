@@ -44,15 +44,9 @@ var (
 )
 
 const (
-	chroot = "chroot"
-	// noderoot = "/noderoot"
+	chroot   = "chroot"
 	exportfs = "/usr/sbin/exportfs"
 )
-
-// NOTE: There is an alternate implementation commented out here that
-// tried to use exportfs for everything, but exportfs does not deal with netmasks for hosts.
-// We do use exportfs to resynchronize the actual exports with /etc/exports.
-// Almost all this code written by Codium.
 
 func CheckExport(directory string) (bool, error) {
 	exportsLock.Lock()

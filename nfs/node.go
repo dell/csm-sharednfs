@@ -50,8 +50,10 @@ func (ns *CsiNfsService) NodePublishVolume(ctx context.Context, req *csi.NodePub
 	var err error
 	retries := 0
 	startTime := time.Now()
-	defer log.Infof("NodePublishVolume %s completed in %s %d retries error: %v", req.VolumeId, time.Now().Sub(startTime), retries, err)
-	for retries := 0; retries < ns.failureRetries; retries++ {
+	defer func() {
+		log.Infof("NodePublishVolume %s completed in %s %d retries error: %v", req.VolumeId, time.Since(startTime), retries, err)
+	}()
+	for retries := range ns.failureRetries {
 		resp, err = ns.nodePublishVolume(ctx, req)
 		if err == nil {
 			return resp, err
@@ -129,23 +131,6 @@ func (ns *CsiNfsService) NodeUnpublishVolume(_ context.Context, req *csi.NodeUnp
 	if !IsNFSVolumeID(req.VolumeId) {
 		return &csi.NodeUnpublishVolumeResponse{}, fmt.Errorf("nfs NodeUnpublishVolume called on non NFS volume %s", req.VolumeId)
 	}
-	// Flock, then funlock, in an attempt to flush everything back
-	// Although I'd like this code to do a flush, unfortunately the flock can hang.
-	// I have not determined a good way around it.
-	// flockContext, flockCancel := context.WithTimeout(context.Background(), 3*time.Second)
-	// defer flockCancel()
-	// cmd := exec.CommandContext(flockContext, "flock", "-s", target, "sync")
-	// out, err := cmd.CombinedOutput()
-	// if err == nil {
-	// 	log.Infof("flock %s \n%s", target, string(out))
-	// 	cmd = exec.Command("flock", "-u", target, "sync")
-	// 	out, err = cmd.CombinedOutput()
-	// 	log.Infof("funlock %s %s\n%s", target, string(out), err)
-	// } else if os.IsNotExist(err) {
-	// 	return &csi.NodeUnpublishVolumeResponse{}, nil
-	// } else {
-	// 	log.Infof("flock failed %s- proceeding anyway: %s", req.VolumeId, err)
-	// }
 
 	// Unmount the target directory
 	log.Infof("Attempting to unmount %s for volume %s", target, req.VolumeId)
