@@ -163,8 +163,6 @@ func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsV
 
 	log.Infof("Calling chroot chmod %s %o", path, NfsFileMode)
 	out, err := GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "chmod", NfsFileModeString, path)
-	// cmd := exec.Command("chroot", "/noderoot", "chmod", NfsFileModeString, path)
-	// output, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Errorf("failed chroot chmod output: %s %s", err, string(out))
 		return resp, err
@@ -172,7 +170,6 @@ func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsV
 
 	// Read the directory entry for the path (debug)
 	out, err = GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "ls", "-ld", path)
-	// output, _ = cmd.CombinedOutput()
 	log.Infof("ls -ld %s:\n %s", path, string(out))
 
 	// Add entry in /etc/exports
@@ -190,7 +187,6 @@ func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsV
 	// Restart the NfsServer
 	log.Infof("ExportNfsVolume Resyncing NfsMountd")
 	err = ResyncNFSMountd(generation)
-	// err = restartNFSMountd()
 	if err != nil {
 		log.Errorf("RestartNfsMountd on behalf of %s returned error %s", path, err)
 		return resp, err
@@ -307,9 +303,8 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 				removed++
 			}
 		}
-		// err = ResyncNFSMountd(generation)
+
 		err = restartNFSMountd()
-		// Unmount the exports
 		for _, export := range exports {
 			exportDir := nodeRoot + "/" + export
 			log.Infof("Attempting unmount %s", NfsExportDirectory)

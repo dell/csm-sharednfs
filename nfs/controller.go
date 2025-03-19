@@ -91,18 +91,6 @@ func (cs *CsiNfsService) LockPV(name, requestID string, highPriority bool) {
 	}
 }
 
-// TryLock attempts to obtain a lock without blocking.
-// A bool is returned that is true if the lock was acquired.
-// If false is returned the string indicating the holder is returned.
-// func (cs *CsiNfsService) TryLockPV(name, requestID string) (bool, string) {
-// 	holder, loaded := PVLock.LoadOrStore(name, requestID)
-// 	if loaded {
-// 		log.Infof("Trylock %s rejected by %s", name, holder)
-// 		return false, holder.(string)
-// 	}
-// 	return true, ""
-// }
-
 func (cs *CsiNfsService) UnlockPV(name string) {
 	PVLock.Delete(name)
 }
@@ -133,16 +121,8 @@ func (cs *CsiNfsService) ControllerPublishVolume(ctx context.Context,
 	// Read the PV. This is necessary from which to determine the namespace.
 	// Can only guarantee unique service name within 63 long
 	serviceName := VolumeIDToServiceName(req.VolumeId)
-	//pv, err := cs.k8sclient.GetPersistentVolume(ctx, name)
-	//if err != nil {
-	//	return nil, status.Errorf(codes.NotFound, "Could not retrive PV %s/%s: %s", name, req.VolumeId, err)
-	//}
-	//namespace := ""
-	//if pv.Spec.ClaimRef != nil && pv.Spec.ClaimRef.Kind == "PersistentVolumeClaim" {
-	//	namespace = pv.Spec.ClaimRef.Namespace
-	//}
+
 	// TODO - confirm decision about putting the Service and Endpoint in the driver namespace
-	//namespace = "vxflexos"
 	namespace := DriverNamespace
 	log.Infof("serviceName %s nfs namespace %s", serviceName, namespace)
 
@@ -291,7 +271,7 @@ func (cs *CsiNfsService) makeNfsService(ctx context.Context, namespace, name str
 		Ports: []discoveryv1.EndpointPort{
 			{
 				Name: &portName,
-				Port: &portNumber, // nfs-server
+				Port: &portNumber,
 				// Couldn't get this to compile, seems to default to TCP
 				// Protocol: corev1.ProtocolTCP,
 			},

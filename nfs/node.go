@@ -22,8 +22,6 @@ import (
 	"strings"
 	"time"
 
-	//"os"
-
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	log "github.com/sirupsen/logrus"
 )
@@ -113,7 +111,6 @@ func (ns *CsiNfsService) nodePublishVolume(ctx context.Context, req *csi.NodePub
 	defer mountCancel()
 	output, err = ns.executor.ExecuteCommandContext(mountContext, "mount", "-t", "nfs4", mountSource, target)
 	// TODO maybe put fsType nfs4 in gofsutil
-	// err := gofsutil.Mount(ctx, mountSource, req.TargetPath, "nfs4")
 	if err != nil {
 		log.Errorf("csi-nfs NodePublish mount %s failed %s", mountSource, err)
 		log.Infof("mount command output:\n%s", string(output))

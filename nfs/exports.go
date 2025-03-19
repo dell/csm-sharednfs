@@ -25,7 +25,6 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	//"time"
 )
 
 var exportsLock sync.Mutex
@@ -149,7 +148,7 @@ func AddExport(directory, options string) (int64, error) {
 		return generation, fmt.Errorf("export entry for %s already exists", directory)
 	}
 
-	file, err := opSys.OpenFile(pathToExports, os.O_APPEND|os.O_WRONLY, 0o644) // #nosec G302
+	file, err := opSys.OpenFile(pathToExports, os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return generation, fmt.Errorf("failed to open %s: %v", exportsDir, err)
 	}
@@ -194,7 +193,7 @@ func DeleteExport(directory string) (int64, error) {
 		return generation, fmt.Errorf("failed to close %s: %v", exportsDir, err)
 	}
 
-	file2, err := opSys.OpenFile(pathToExports, os.O_TRUNC|os.O_WRONLY, 0o644) // #nosec G302
+	file2, err := opSys.OpenFile(pathToExports, os.O_TRUNC|os.O_WRONLY, 0o644)
 	if err != nil {
 		return generation, fmt.Errorf("failed to open %s: %v", exportsDir, err)
 	}
