@@ -481,10 +481,18 @@ func createMockServer(t *testing.T, ip string, mockServer *mocks.MockNfsServer) 
 	baseServer := grpc.NewServer()
 	t.Cleanup(func() { baseServer.Stop() })
 
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
 	proto.RegisterNfsServer(baseServer, mockServer)
 	go func() {
-		if err := baseServer.Serve(lis); err != nil {
-			t.Errorf("Failed to serve: %v", err)
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			if err := baseServer.Serve(lis); err != nil {
+				t.Errorf("Failed to serve: %v", err)
+			}
 		}
 	}()
 }
