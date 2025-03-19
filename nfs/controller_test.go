@@ -170,10 +170,11 @@ func TestLockPV(t *testing.T) {
 			cs := &CsiNfsService{}
 
 			if test.init != nil {
+				// Start init in a new goroutine, this will simulate a store and then clear the lock to be acquired again
 				go test.init()
 			}
 			time.Sleep(1 * time.Second)
-			cs.LockPV(test.pvName, test.requestID, true)
+			cs.LockPV(test.pvName, test.requestID, test.highPriority)
 
 			defer PVLock.Clear()
 
