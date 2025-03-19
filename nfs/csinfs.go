@@ -101,11 +101,19 @@ func (o *OSImpl) MkdirAll(fileName string, perm os.FileMode) error {
 }
 
 func (o *OSImpl) Open(fileName string) (*os.File, error) {
-	return os.Open(fileName)
+	file, err := opSys.Open(fileName)
+	if err != nil {
+		return nil, err
+	}
+	return file, err
 }
 
 func (o *OSImpl) OpenFile(fileName string, flag int, perm os.FileMode) (*os.File, error) {
-	return os.OpenFile(fileName, flag, perm)
+	file, err := opSys.OpenFile(fileName, flag, perm)
+	if err != nil {
+		return nil, err
+	}
+	return file, nil
 }
 
 func (o *OSImpl) Chown(fileName string, uid, gid int) error {
