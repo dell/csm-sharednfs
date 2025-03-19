@@ -399,6 +399,7 @@ func TestNodePublishVolume(t *testing.T) {
 		}, metav1.CreateOptions{})
 		executor := mocks.NewMockExecutor(gomock.NewController(t))
 		executor.EXPECT().ExecuteCommand("mkdir", "-p", gomock.Any()).AnyTimes().Return([]byte{}, errors.New("mkdir error"))
+		executor.EXPECT().ExecuteCommand("umount", gomock.Any()).AnyTimes().Return([]byte{}, errors.New("mkdir error"))
 		executor.EXPECT().ExecuteCommand("chmod", "02777", gomock.Any()).AnyTimes().Return([]byte{}, errors.New("chmod error"))
 		executor.EXPECT().ExecuteCommandContext(gomock.Any(), "mount", "-t", "nfs4", gomock.Any(), gomock.Any()).AnyTimes().Return([]byte{}, errors.New("mount error"))
 		service := &CsiNfsService{

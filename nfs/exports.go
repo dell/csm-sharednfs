@@ -25,7 +25,6 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	//"time"
 )
 
 var exportsLock sync.Mutex
@@ -183,10 +182,16 @@ func DeleteExport(directory string) (int64, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		file1.Close()
+		err = file1.Close()
+		if err != nil {
+			log.Infof("failed to close %s: %v", exportsDir, err)
+		}
 		return generation, fmt.Errorf("error reading %s: %v", exportsDir, err)
 	}
-	file1.Close()
+	err = file1.Close()
+	if err != nil {
+		return generation, fmt.Errorf("failed to close %s: %v", exportsDir, err)
+	}
 
 	file2, err := opSys.OpenFile(pathToExports, os.O_TRUNC|os.O_WRONLY, 0o644)
 	if err != nil {
@@ -195,11 +200,17 @@ func DeleteExport(directory string) (int64, error) {
 
 	for _, line := range lines {
 		if _, err := file2.WriteString(line + "\n"); err != nil {
-			file2.Close()
+			err = file2.Close()
+			if err != nil {
+				log.Infof("failed to close %s: %v", exportsDir, err)
+			}
 			return generation, fmt.Errorf("failed to write to %s: %v", exportsDir, err)
 		}
 	}
-	file2.Close()
+	err = file2.Close()
+	if err != nil {
+		return generation, fmt.Errorf("failed to close %s: %v", exportsDir, err)
+	}
 	log.Infof("DeleteExport %s completed", directory)
 	generation = generation + 1
 	return generation, nil

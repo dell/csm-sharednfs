@@ -22,9 +22,6 @@ import (
 	"strings"
 	"time"
 
-	//"os"
-	"os/exec"
-
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	log "github.com/sirupsen/logrus"
 )
@@ -97,8 +94,7 @@ func (ns *CsiNfsService) nodePublishVolume(ctx context.Context, req *csi.NodePub
 	if err != nil {
 		log.Errorf("Target path %s not created: %s ... proceeding anyway: %s \n", target, err, string(output))
 		// Unmount the target directory
-		cmd := exec.Command("umount", target)
-		out, err := cmd.CombinedOutput()
+		out, err := ns.executor.ExecuteCommand("umount", target)
 		log.Infof("csi-nfs NodeUnpublish %s umount target error: %v:\n%s", target, err, string(out))
 	}
 
@@ -111,13 +107,10 @@ func (ns *CsiNfsService) nodePublishVolume(ctx context.Context, req *csi.NodePub
 	// Mounting the volume
 	mountSource := service.Spec.ClusterIP + ":" + NfsExportDirectory + "/" + serviceName
 	log.Infof("csi-nfs NodePublish attempting mount %s to %s", mountSource, target)
-	// cmd := exec.Command("chroot", "/noderoot", "mount", "-t", "nfs4", mountSource, req.TargetPath)
-	// cmd := exec.Command("mount", "-t", "nfs4", mountSource, target)
 	mountContext, mountCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer mountCancel()
 	output, err = ns.executor.ExecuteCommandContext(mountContext, "mount", "-t", "nfs4", mountSource, target)
 	// TODO maybe put fsType nfs4 in gofsutil
-	// err := gofsutil.Mount(ctx, mountSource, req.TargetPath, "nfs4")
 	if err != nil {
 		log.Errorf("csi-nfs NodePublish mount %s failed %s", mountSource, err)
 		log.Infof("mount command output:\n%s", string(output))

@@ -710,6 +710,54 @@ func TestDeleteExport(t *testing.T) {
 			want:    true,
 			wantErr: true,
 		},
+		{
+			name:      "scanner error reading /noderoot/etc/exports",
+			directory: exportsDir,
+			fileName:  exportsFile,
+			setup: func(dir string, fileName string) (*os.File, error) {
+				err := os.MkdirAll(dir, 0o755)
+				if err != nil {
+					t.Errorf("failed to create temp directory: %v", err)
+					return nil, errors.New("failed to create temp directory")
+				}
+
+				// Create a mock /noderoot/etc/exports file
+				file, err := os.Create(dir + fileName)
+				if err != nil {
+					t.Errorf("failed to create temp file: %v", err)
+					return nil, errors.New("failed to create temp directory")
+				}
+
+				// Write test data to the file
+				_, err = file.WriteString(fmt.Sprintf("%s\n", dir+fileName))
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				file.Close()
+
+				GetBufioScanner = func(file *os.File) *bufio.Scanner {
+					bufioMutex.Lock()
+					defer bufioMutex.Unlock()
+					scanner := bufio.NewScanner(file)
+					// close the file before returning to induce scanner error
+					file.Close()
+					return scanner
+				}
+
+				return file, nil
+			},
+			teardown: func(dir string, file *os.File) {
+				if file != nil {
+					file.Close()
+				}
+				os.Remove(file.Name())
+				os.RemoveAll(dir)
+				GetBufioScanner = defaultGetBufioScanner
+			},
+			want:    true,
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {

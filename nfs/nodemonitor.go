@@ -141,7 +141,7 @@ func (s *CsiNfsService) pinger(node *v1.Node) {
 				log.Infof("pinger: initiating node recover actions node %s", status.nodeIP)
 				status.inRecovery = true
 				status.dumpingExports = true
-				// cal nodeRecovery to initiate the recovery process
+
 				go s.nodeRecovery(status.nodeIP)
 			}
 		} else {

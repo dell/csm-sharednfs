@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -101,11 +102,12 @@ func (o *OSImpl) MkdirAll(fileName string, perm os.FileMode) error {
 }
 
 func (o *OSImpl) Open(fileName string) (*os.File, error) {
-	return os.Open(fileName)
+	return os.Open(filepath.Clean(fileName))
 }
 
 func (o *OSImpl) OpenFile(fileName string, flag int, perm os.FileMode) (*os.File, error) {
-	return os.OpenFile(fileName, flag, perm)
+	// #nosec G304 -- This should already be cleaned. False positive.
+	return os.OpenFile(filepath.Clean(fileName), flag, perm)
 }
 
 func (o *OSImpl) Chown(fileName string, uid, gid int) error {
