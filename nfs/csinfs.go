@@ -106,6 +106,7 @@ func (o *OSImpl) Open(fileName string) (*os.File, error) {
 }
 
 func (o *OSImpl) OpenFile(fileName string, flag int, perm os.FileMode) (*os.File, error) {
+	// #nosec G304 -- This should already be cleaned. False positive.
 	return os.OpenFile(filepath.Clean(fileName), flag, perm)
 }
 
