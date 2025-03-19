@@ -126,70 +126,37 @@ func TestDeleteVolume(t *testing.T) {
 	}
 }
 
-func TestHighPriorityLockPV(t *testing.T) {
-	tests := []struct {
-		name        string
-		pvName      string
-		requestID   string
-		expectedLog string
-	}{
-		{
-			name:      "Acquire lock",
-			pvName:    "test-pv",
-			requestID: "test-request",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			// Set up the test
-			buf := new(bytes.Buffer)
-			log.SetOutput(buf)
-
-			// Call the function
-			cs := &CsiNfsService{}
-			cs.LockPV(test.pvName, test.requestID, true)
-
-			defer PVLock.Clear()
-
-			// Check the output
-			if test.expectedLog != "" {
-				if !strings.Contains(buf.String(), test.expectedLog) {
-					t.Errorf("expected log %q, got %q", test.expectedLog, buf.String())
-				}
-			} else {
-				if buf.String() != "" {
-					t.Errorf("expected no log, got %q", buf.String())
-				}
-			}
-		})
-	}
-}
-
 func TestLockPV(t *testing.T) {
 	tests := []struct {
-		name        string
-		pvName      string
-		init        func()
-		requestID   string
-		expectedLog string
+		name         string
+		pvName       string
+		init         func()
+		requestID    string
+		expectedLog  string
+		highPriority bool
 	}{
 		{
-			name:      "Acquire lock",
-			pvName:    "test-pv",
-			requestID: "test-request",
+			name:         "Acquire lock normal priority",
+			pvName:       "test-pv",
+			requestID:    "test-request",
+			highPriority: false,
 		},
 		{
-			name:      "Acquire lock",
+			name:         "Acquire lock high priority",
+			pvName:       "test-pv",
+			requestID:    "test-request",
+			highPriority: true,
+		},
+		{
+			name:      "Acquire lock high priority and wait",
 			pvName:    "test-pv",
 			requestID: "test-request",
 			init: func() {
-				// t.Logf("Locking test-pv")
 				PVLock.Store("test-pv", "test-request")
 				defer PVLock.Clear()
 				time.Sleep(2 * time.Second)
-				// t.Logf("Unlocking test-pv")
 			},
+			highPriority: true,
 		},
 	}
 
