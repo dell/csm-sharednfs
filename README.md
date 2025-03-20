@@ -1,2 +1,1 @@
-# actions-template
-Template repository to host GitHub Actions for Dell repositories.
+# csm-hbnfs is a library that will export block volumes from a CSI driver via NFS.
