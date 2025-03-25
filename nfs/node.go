@@ -111,7 +111,7 @@ func (ns *CsiNfsService) nodePublishVolume(ctx context.Context, req *csi.NodePub
 	log.Infof("csi-nfs NodePublish attempting mount %s to %s", mountSource, target)
 	mountContext, mountCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer mountCancel()
-	output, err = ns.executor.ExecuteCommandContext(mountContext, "mount", "-t", "nfs4", mountSource, target)
+	output, err = ns.executor.ExecuteCommandContext(mountContext, "mount", "-w", "-t", "nfs4", mountSource, target)
 	// TODO maybe put fsType nfs4 in gofsutil
 	if err != nil {
 		log.Errorf("csi-nfs NodePublish mount %s failed %s", mountSource, err)

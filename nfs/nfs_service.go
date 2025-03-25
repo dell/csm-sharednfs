@@ -19,9 +19,9 @@ package nfs
 import (
 	"context"
 	"net"
+	"os"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -79,7 +79,7 @@ func getNfsClient(ipaddress, port string) (proto.NfsClient, error) {
 	// TODO check if this is still applicable: add support for ipv6, add support for closing the client
 	client, err := grpc.NewClient(ipaddress+":"+port, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
-		log.Errorf("Could not connect to nfsService %s:%s", ipaddress, port)
+		log.Errorf("[FERNANDO] Could not connect to nfsService %s:%s", ipaddress, port)
 		return nil, err
 	}
 
@@ -155,10 +155,10 @@ func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsV
 	log.Infof("ls -ld %s:\n %s", path, string(out))
 
 	// Add entry in /etc/exports
-	options := "(rw)"
+	options := "(rw,no_subtree_check)"
 	optionsString := nfsService.podCIDR + options
 	// Add the link-local overlay network for OCP. TODO: add conditionally?
-	optionsString = optionsString + " 169.254.0.0/17(rw)"
+	optionsString = optionsString + " 169.254.0.0/17" + options
 
 	log.Infof("ExportNfsVolume Calling AddExport %s/ %s", path, optionsString)
 	generation, err = AddExport(path+"/", optionsString)
@@ -166,11 +166,11 @@ func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsV
 		log.Errorf("AddExport %s returned error %s", path, err)
 		return resp, err
 	}
-	// Restart the NfsServer
+
 	log.Infof("ExportNfsVolume Resyncing NfsMountd")
 	err = ResyncNFSMountd(generation)
 	if err != nil {
-		log.Errorf("RestartNfsMountd on behalf of %s returned error %s", path, err)
+		log.Errorf("ResyncNFSMountd on behalf of %s returned error %s", path, err)
 		return resp, err
 	}
 	log.Infof("ExportNfsVolume %s %s ALL GOOD", req.VolumeId, path)
@@ -222,28 +222,31 @@ func (nfs *nfsServer) UnexportNfsVolume(ctx context.Context, req *proto.Unexport
 		log.Infof("Calling UnmountVolume VolumeId %s exportPath %s context %+v", req.VolumeId, exportPath, req.UnexportNfsContext)
 		err = nfsService.vcsi.UnmountVolume(unmountCtx, req.VolumeId, NfsExportDirectory, req.UnexportNfsContext)
 		if err == nil {
-			break
+			log.Infof("UnexportNfsVolume %s %s ALL GOOD", req.VolumeId, exportPath)
+			return resp, nil
 		}
+
 		log.Infof("UnmountVolume returned error %s", err)
-		if strings.Contains(err.Error(), "not mounted") {
-			err = nil
-			break
+		if strings.Contains(err.Error(), "not mounted") || strings.Contains(err.Error(), "no such file or directory") {
+			log.Infof("UnexportNfsVolume %s %s ALL GOOD", req.VolumeId, exportPath)
+			return resp, nil
 		}
-		// Restart the nfs-mountd. It may be out of sync.
-		log.Infof("restarting the NFS service as it may be out of sync")
-		err = restartNFSMountd()
-		if err != nil {
-			log.Errorf("restartNFSMountd returned error %s", err)
-			return resp, err
-		}
+
+		// // Restart the nfs-mountd. It may be out of sync.
+		// log.Infof("restarting the NFS service as it may be out of sync")
+		// err = restartNFSMountd()
+		// if err != nil {
+		// 	log.Errorf("restartNFSMountd returned error %s", err)
+		// 	return resp, err
+		// }
 		log.Errorf("UnmountVolume %s retry %d returned error %s", exportPath, i, err)
 	}
+
 	if err != nil {
 		log.Infof("UnmountVolume timed out after several retries")
-	} else {
-		log.Infof("UnexportNfsVolume %s %s ALL GOOD", req.VolumeId, exportPath)
 	}
-	return resp, err
+
+	return nil, err
 }
 
 func finish(ctx context.Context, method, requestID string, start time.Time) {
@@ -266,7 +269,7 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 	start := time.Now()
 	defer finish(ctx, "Ping", requestID, start)
 	resp := &proto.PingResponse{}
-	log.Debugf("received ping nodeIpAddress %s dumpAllExports %t", req.NodeIpAddress, req.DumpAllExports)
+	log.Infof("received ping nodeIpAddress %s dumpAllExports %t", req.NodeIpAddress, req.DumpAllExports)
 	resp.Ready = true
 	resp.Status = ""
 	if req.DumpAllExports {
@@ -275,36 +278,61 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 		if err != nil {
 			return resp, err
 		}
-		log.Infof("Ping received dumpAllExports for %d volumes", len(exports))
-		// var generation int64
-		// Remove the exports from the kernel
+
+		log.Infof("[FERNANDO] Ping received dumpAllExports for %d volumes", len(exports))
+		// Should only delete if it is mounted...
 		for _, export := range exports {
 			parts := strings.Split(export, " ")
 			if len(parts) >= 1 {
-				generation, _ = DeleteExport(parts[0])
+				generation, err = DeleteExport(parts[0])
+				if err != nil {
+					log.Errorf("DeleteExport %s returned error %s", parts[0], err)
+				}
+
 				removed++
 			}
 		}
 
-		err = restartNFSMountd()
-		for _, export := range exports {
-			exportDir := nodeRoot + "/" + export
-			log.Infof("Attempting unmount %s", NfsExportDirectory)
-			err := nfs.unmounter.Unmount(exportDir, 0)
-			if err != nil {
-				log.Errorf("Error unmounting %s: %s", NfsExportDirectory, err)
-			} else {
-				err := syscall.Rmdir(exportDir)
-				if err != nil {
-					log.Errorf("Error removing directory %s: %s", NfsExportDirectory, err)
-				}
-			}
-		}
-
+		err = ResyncNFSMountd(generation)
 		if err != nil {
-			log.Errorf("Ping DumpAllExports resync failed %d exports", removed)
+			log.Errorf("ResyncNFSMountd returned error %s", err)
 			return resp, err
 		}
+
+		// err = restartNFSMountd()
+		for _, export := range exports {
+			parts := strings.Split(export, " ")
+			exportDir := nodeRoot + "/" + parts[0]
+			exportDir = strings.TrimSuffix(exportDir, "/")
+			log.Infof("[FERNANDO] Attempting unmount %s", exportDir)
+			// err := nfs.unmounter.Unmount(exportDir, 0)
+			out, err := nfs.executor.ExecuteCommand("umount", "--force", exportDir)
+			if err != nil && !strings.Contains(err.Error(), "not mounted") {
+				log.Errorf("Error unmounting %s: %s - still continuing...", exportDir, err.Error())
+			}
+
+			log.Infof("Output from umount: %s", string(out))
+
+			// Remove any remnants of mount..
+			log.Infof("[FERNANDO] Attempts to remove %s", exportDir)
+			err = os.RemoveAll(exportDir)
+			if err != nil {
+				log.Errorf("Error removing directory %s: %s", exportDir, err)
+			}
+
+			exportDir = exportDir + "-dev"
+			log.Infof("[FERNANDO] Attempts to remove %s", exportDir)
+			err = os.RemoveAll(exportDir)
+			if err != nil {
+				log.Errorf("Error removing directory %s: %s", exportDir, err)
+			}
+
+		}
+
+		// if err != nil {
+		// 	log.Errorf("Ping DumpAllExports resync failed %d exports", removed)
+		// 	return resp, err
+		// }
 
 		log.Infof("Ping DumpAllExports removed %d exports", removed)
 	}

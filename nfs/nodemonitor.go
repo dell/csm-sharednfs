@@ -115,12 +115,15 @@ func (s *CsiNfsService) pinger(node *v1.Node) {
 		log.Errorf("pinger aborting: could not start on node %s because no IP Address", node.Name)
 		return
 	}
+
 	status := &NodeStatus{
-		nodeName: node.Name,
-		nodeIP:   node.Status.Addresses[0].Address,
-		online:   true,
-		status:   "",
+		nodeName:       node.Name,
+		nodeIP:         node.Status.Addresses[0].Address,
+		online:         true,
+		status:         "",
+		dumpingExports: false,
 	}
+
 	nodeIPAddress[status.nodeIP] = status
 
 	// This endless loop pings the node to determine status
@@ -129,6 +132,7 @@ func (s *CsiNfsService) pinger(node *v1.Node) {
 			NodeIpAddress:  status.nodeIP,
 			DumpAllExports: status.dumpingExports,
 		}
+
 		resp, err := s.ping(pingRequest)
 		if err != nil || (resp != nil && !resp.Ready) {
 			if status.online {
