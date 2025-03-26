@@ -48,7 +48,7 @@ var Pinger = struct {
 }{
 	rate:       15 * time.Second,
 	timeout:    10 * time.Second,
-	maxBadPing: 2,
+	maxBadPing: 10,
 	monitorMux: &sync.Mutex{},
 }
 
@@ -89,6 +89,7 @@ func (s *CsiNfsService) ping(pingRequest *proto.PingRequest) (*proto.PingRespons
 	defer cancel()
 	nodeClient, err := getNfsClient(pingRequest.NodeIpAddress, s.nfsClientServicePort)
 	if err != nil {
+		log.Infof("[FERNANDO] ping: unable to get nfsClient: %s", err.Error())
 		return nil, err
 	}
 	resp, err := nodeClient.Ping(ctx, pingRequest)
@@ -116,7 +117,9 @@ func (s *CsiNfsService) pinger(node *v1.Node) {
 		return
 	}
 
-	status := &NodeStatus{
+	log.Infof("[FERNANDO] Let's start Pinging for %s", node.Name)
+
+	nodeStatus := NodeStatus{
 		nodeName:       node.Name,
 		nodeIP:         node.Status.Addresses[0].Address,
 		online:         true,
@@ -124,42 +127,44 @@ func (s *CsiNfsService) pinger(node *v1.Node) {
 		dumpingExports: false,
 	}
 
-	nodeIPAddress[status.nodeIP] = status
+	nodeIPAddress[nodeStatus.nodeIP] = &nodeStatus
 
 	// This endless loop pings the node to determine status
 	for {
-		pingRequest := &proto.PingRequest{
-			NodeIpAddress:  status.nodeIP,
-			DumpAllExports: status.dumpingExports,
+		pingRequest := proto.PingRequest{
+			NodeIpAddress:  nodeStatus.nodeIP,
+			DumpAllExports: nodeStatus.dumpingExports,
 		}
 
-		resp, err := s.ping(pingRequest)
+		resp, err := s.ping(&pingRequest)
 		if err != nil || (resp != nil && !resp.Ready) {
-			if status.online {
+			log.Errorf("pinger: error pinging node %s - error: %s", nodeStatus.nodeIP, err.Error())
+			if nodeStatus.online {
 				log.Infof("pinger: Node %s transitioned to offline", pingRequest.NodeIpAddress)
 			}
-			status.online = false
-			status.badPings++
-			status.goodPings = 0
-			if !status.inRecovery && status.badPings >= Pinger.maxBadPing {
-				log.Infof("pinger: initiating node recover actions node %s", status.nodeIP)
-				status.inRecovery = true
-				status.dumpingExports = true
+			nodeStatus.online = false
+			nodeStatus.badPings++
+			nodeStatus.goodPings = 0
+			if !nodeStatus.inRecovery && nodeStatus.badPings >= Pinger.maxBadPing {
+				log.Infof("pinger: initiating node recover actions node %s", nodeStatus.nodeIP)
+				nodeStatus.inRecovery = true
+				nodeStatus.dumpingExports = true
 
-				go s.nodeRecovery(status.nodeIP)
+				go s.nodeRecovery(nodeStatus.nodeIP)
 			}
 		} else {
-			if !status.online {
+			if !nodeStatus.online {
 				log.Infof("pinger: Node %s transitioned to online", pingRequest.NodeIpAddress)
 			}
-			status.status = resp.Status
-			status.online = true
-			status.badPings = 0
-			status.goodPings++
-			if status.goodPings >= 2 {
-				status.dumpingExports = false
+			nodeStatus.status = resp.Status
+			nodeStatus.online = true
+			nodeStatus.badPings = 0
+			nodeStatus.goodPings++
+			if nodeStatus.goodPings >= 2 {
+				nodeStatus.dumpingExports = false
 			}
-			status.inRecovery = false
+
+			nodeStatus.inRecovery = false
 		}
 		time.Sleep(getPingRate())
 	}
