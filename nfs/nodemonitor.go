@@ -18,6 +18,7 @@ package nfs
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -46,7 +47,7 @@ var Pinger = struct {
 	maxBadPing int
 	monitorMux *sync.Mutex
 }{
-	rate:       15 * time.Second,
+	rate:       2 * time.Second,
 	timeout:    10 * time.Second,
 	maxBadPing: 10,
 	monitorMux: &sync.Mutex{},
@@ -142,15 +143,20 @@ func (s *CsiNfsService) pinger(node *v1.Node) {
 			if nodeStatus.online {
 				log.Infof("pinger: Node %s transitioned to offline", pingRequest.NodeIpAddress)
 			}
-			nodeStatus.online = false
-			nodeStatus.badPings++
-			nodeStatus.goodPings = 0
-			if !nodeStatus.inRecovery && nodeStatus.badPings >= Pinger.maxBadPing {
-				log.Infof("pinger: initiating node recover actions node %s", nodeStatus.nodeIP)
-				nodeStatus.inRecovery = true
-				nodeStatus.dumpingExports = true
 
-				go s.nodeRecovery(nodeStatus.nodeIP)
+			if !strings.Contains(err.Error(), "network is unreachable") && !strings.Contains(err.Error(), "error while waiting for new LB policy update") {
+				nodeStatus.online = false
+				nodeStatus.badPings++
+				nodeStatus.goodPings = 0
+				if !nodeStatus.inRecovery && nodeStatus.badPings >= Pinger.maxBadPing {
+					log.Infof("pinger: initiating node recover actions node %s", nodeStatus.nodeIP)
+					nodeStatus.inRecovery = true
+					nodeStatus.dumpingExports = true
+
+					go s.nodeRecovery(nodeStatus.nodeIP)
+				}
+			} else {
+				log.Info("pinger: We might not be online on this node")
 			}
 		} else {
 			if !nodeStatus.online {

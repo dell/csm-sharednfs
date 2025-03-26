@@ -19,11 +19,9 @@ package nfs
 import (
 	"context"
 	"net"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -311,34 +309,36 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 
 			exportDir = filepath.Clean(exportDir)
 			log.Infof("[FERNANDO] Attempting unmount %s", exportDir)
-			err = syscall.Unmount(exportDir, 0)
-			// out, err := nfs.executor.ExecuteCommand("umount", "--force", exportDir)
-			if err != nil && !strings.Contains(err.Error(), "not mounted") {
-				log.Errorf("Error unmounting %s: %s - still continuing...", exportDir, err.Error())
-			}
 
-			// log.Infof("Output from umount: %s", string(out))
+			// NOTE: Should we be unmounting and removing when migrating??
+			// err = syscall.Unmount(exportDir, 0)
+			// // out, err := nfs.executor.ExecuteCommand("umount", "--force", exportDir)
+			// if err != nil && !strings.Contains(err.Error(), "not mounted") {
+			// 	log.Errorf("Error unmounting %s: %s - still continuing...", exportDir, err.Error())
+			// }
 
-			// Remove any remnants of mount..
-			log.Infof("[FERNANDO] Attempts to remove %s", exportDir)
-			err = os.RemoveAll(exportDir)
-			if err != nil {
-				log.Errorf("Error removing directory %s: %s", exportDir, err)
-			}
+			// // log.Infof("Output from umount: %s", string(out))
 
-			exportDir = exportDir + "-dev"
-			log.Infof("[FERNANDO] Attempting unmount %s", exportDir)
-			err = syscall.Unmount(exportDir, 0)
-			// out, err := nfs.executor.ExecuteCommand("umount", "--force", exportDir)
-			if err != nil && !strings.Contains(err.Error(), "not mounted") {
-				log.Errorf("Error unmounting %s: %s - still continuing...", exportDir, err.Error())
-			}
+			// // Remove any remnants of mount..
+			// log.Infof("[FERNANDO] Attempts to remove %s", exportDir)
+			// err = os.RemoveAll(exportDir)
+			// if err != nil {
+			// 	log.Errorf("Error removing directory %s: %s", exportDir, err)
+			// }
 
-			log.Infof("[FERNANDO] Attempts to remove %s", exportDir)
-			err = os.RemoveAll(exportDir)
-			if err != nil {
-				log.Errorf("Error removing directory %s: %s", exportDir, err)
-			}
+			// exportDir = exportDir + "-dev"
+			// log.Infof("[FERNANDO] Attempting unmount %s", exportDir)
+			// err = syscall.Unmount(exportDir, 0)
+			// // out, err := nfs.executor.ExecuteCommand("umount", "--force", exportDir)
+			// if err != nil && !strings.Contains(err.Error(), "not mounted") {
+			// 	log.Errorf("Error unmounting %s: %s - still continuing...", exportDir, err.Error())
+			// }
+
+			// log.Infof("[FERNANDO] Attempts to remove %s", exportDir)
+			// err = os.RemoveAll(exportDir)
+			// if err != nil {
+			// 	log.Errorf("Error removing directory %s: %s", exportDir, err)
+			// }
 
 		}
 
