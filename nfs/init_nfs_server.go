@@ -26,6 +26,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// updateKnownHosts updates the known_hosts file with the keys from ssh-keyscan.
+// This is required to support systemctl commands or else host verification will fail
+// Updates known_hosts with the keys from ssh-keyscan, if necessary.
 func (cs *CsiNfsService) updateKnownHosts() error {
 	// Run ssh-keyscan
 	cmd, err := cs.executor.ExecuteCommand("chroot", "/noderoot", "ssh-keyscan", "-t", "rsa,ecdsa,ed25519", "localhost")
@@ -106,6 +109,7 @@ func (cs *CsiNfsService) initializeNfsServer() error {
 	// Check to see if nfs-server is active (exited ok)
 	// Note: systemctl doesn't work when invoked from a container unless you ssh localhost before executing it.
 	// You will get the message "Failed to connect to bus: No data available" because systemctl must think it's on the local host.
+
 	restartNfsServer := false
 	out, err := cs.executor.ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server")
 	if err != nil || !strings.Contains(string(out), "Active: active") {
@@ -125,18 +129,8 @@ func (cs *CsiNfsService) initializeNfsServer() error {
 
 	log.Infof("nfs-server and nfs-mountd are not active, attempting to configure them")
 
-	// First copy the nfs.conf file to /noderoot/etc/nfs.conf. This is a 2-step process.
-	// log.Infof("Configuring /etc/nfs.conf")
-	// out, err = cs.executor.ExecuteCommand("cp", "/etc/nfs.conf", "/noderoot/tmp/nfs.conf")
-	// if err != nil {
-	// 	log.Errorf("Couldn't copy /nfs.conf to /noderoot/tmp/nfs.conf: %s", string(out))
-	// 	return err
-	// }
-	// out, err = cs.executor.ExecuteCommand("chroot", "/noderoot", "cp", "/tmp/nfs.conf", "/etc/nfs.conf")
-	// if err != nil {
-	// 	log.Errorf("Couldn't copy /tmp/nfs.conf to /etc/nfs.conf: %s", string(out))
-	// 	return err
-	// }
+	// "/noderoot/etc/" on the container has the same nfs.conf file as the host.
+	// Attempt to start the nfs server and mountd services.
 
 	// Now enable the nfs-server
 	out, err = cs.executor.ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "enable", "nfs-server")
