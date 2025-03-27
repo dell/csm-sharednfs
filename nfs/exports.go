@@ -216,7 +216,7 @@ func restartNFSMountd() error {
 	exportsLock.Lock()
 	defer exportsLock.Unlock()
 	log.Infof("restarting nfs-mountd")
-	output, err := GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "container-systemctl", "restart", "nfs-mountd")
+	output, err := GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "restart", "nfs-mountd")
 	if err != nil {
 		return fmt.Errorf("failed to restart nfs-mountd: %v, output: %s", err, string(output))
 	}
@@ -242,7 +242,7 @@ func restartNFSMountd() error {
 
 // isNfsMountdActive checks if the nfs-mountd service is active
 func isNfsMountdActive() bool {
-	_, err := GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "container-systemctl", "is-active", "--quiet", "nfs-mountd")
+	_, err := GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "is-active", "--quiet", "nfs-mountd")
 	return err == nil
 }
 

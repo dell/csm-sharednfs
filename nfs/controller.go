@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -243,7 +245,12 @@ func (cs *CsiNfsService) makeNfsService(ctx context.Context, namespace, name str
 
 	// Create the endpointslice
 	portName := "nfs-server"
-	var portNumber int32 = 2049
+	port, err := strconv.Atoi(os.Getenv(EnvNFSServerPort))
+	if err != nil {
+		log.Warnf("invalid port %s - err %v", os.Getenv(EnvNFSServerPort), err)
+		port = 2049 // default to 2049 if invalid port is parsed
+	}
+	var portNumber int32 = int32(port)
 	endpointSlice := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -307,7 +314,7 @@ func (cs *CsiNfsService) makeNfsService(ctx context.Context, namespace, name str
 			Ports: []corev1.ServicePort{
 				{
 					Name:     "nfs-server",
-					Port:     2049,
+					Port:     portNumber,
 					Protocol: corev1.ProtocolTCP,
 				},
 			},
