@@ -570,7 +570,7 @@ func TestIsNfsMountdActive(t *testing.T) {
 			GetLocalExecutor = func() Executor {
 				return me
 			}
-			me.EXPECT().ExecuteCommand("chroot", "/noderoot", "container-systemctl", "is-active", "--quiet", "nfs-mountd").Return(tt.mockReturn, tt.mockError)
+			me.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "is-active", "--quiet", "nfs-mountd").Return(tt.mockReturn, tt.mockError)
 
 			value := isNfsMountdActive()
 			assert.Equal(t, tt.expected, value)
@@ -822,8 +822,8 @@ func TestRestartNFSMountd(t *testing.T) {
 				return me
 			}
 			waitTime = tt.wait
-			me.EXPECT().ExecuteCommand("chroot", "/noderoot", "container-systemctl", "restart", "nfs-mountd").Return(tt.mockReturn, tt.mockRestartNFSError)
-			me.EXPECT().ExecuteCommand("chroot", "/noderoot", "container-systemctl", "is-active", "--quiet", "nfs-mountd").Return(tt.mockReturn, tt.mockIsNFSActiveError).AnyTimes()
+			me.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "restart", "nfs-mountd").Return(tt.mockReturn, tt.mockRestartNFSError)
+			me.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "is-active", "--quiet", "nfs-mountd").Return(tt.mockReturn, tt.mockIsNFSActiveError).AnyTimes()
 
 			GetLocalExecutor = func() Executor {
 				return me

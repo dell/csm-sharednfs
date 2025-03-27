@@ -28,12 +28,23 @@ import (
 
 func (cs *CsiNfsService) updateKnownHosts() error {
 	// Run ssh-keyscan
-	cmd, err := cs.executor.ExecuteCommand("chroot", "/noderoot", "ssh-keyscan", "-t", "rsa", "localhost")
+	cmd, err := cs.executor.ExecuteCommand("chroot", "/noderoot", "ssh-keyscan", "-t", "rsa,ecdsa,ed25519", "localhost")
+	// Run ssh-keyscan for multiple key types
 	if err != nil {
 		return fmt.Errorf("failed to run ssh-keyscan: %v", err)
 	}
-	// Read the output of ssh-keyscan
-	newKey := string(cmd)
+	// Extract the keys from the ssh-keyscan output
+	output := strings.TrimSpace(string(cmd))
+	lines := strings.Split(output, "\n")
+	keys := make(map[string]string)
+	for _, line := range lines {
+		if strings.Contains(line, "localhost") && !strings.HasPrefix(line, "#") {
+			parts := strings.SplitN(line, " ", 3)
+			if len(parts) == 3 {
+				keys[parts[1]] = parts[2] // Store key type and key
+			}
+		}
+	}
 
 	// Read the known_hosts file
 	knownHostsPath := "/noderoot/root/.ssh/known_hosts"
@@ -42,16 +53,27 @@ func (cs *CsiNfsService) updateKnownHosts() error {
 		return fmt.Errorf("failed to read known_hosts: %v", err)
 	}
 
-	// Check if the key already exists
+	// Check if the keys already exist and update them if necessary
 	scanner := bufio.NewScanner(bytes.NewReader(knownHosts))
 	var updatedHosts bytes.Buffer
-	keyExists := false
+	existingKeys := make(map[string]bool)
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.Contains(line, "localhost") {
-			updatedHosts.WriteString(newKey)
-			keyExists = true
-		} else if !strings.HasPrefix(line, "#") {
+		// Ignore lines that are comments and end with \n
+		if strings.HasPrefix(line, "#") && strings.HasSuffix(line, "\n") {
+			continue
+		}
+		updated := false
+		for keyType, key := range keys {
+			if strings.Contains(line, "localhost") && strings.Contains(line, keyType) {
+				// Replace the existing localhost entry with the new key
+				updatedHosts.WriteString("localhost " + keyType + " " + key + "\n")
+				updated = true
+				existingKeys[keyType] = true // Mark this key type as updated
+				break
+			}
+		}
+		if !updated {
 			updatedHosts.WriteString(line + "\n")
 		}
 	}
@@ -59,10 +81,11 @@ func (cs *CsiNfsService) updateKnownHosts() error {
 		return fmt.Errorf("failed to scan known_hosts: %v", err)
 	}
 
-	// Append the new key if it doesn't exist
-	log.Infof("keyExists: %t", keyExists)
-	if !keyExists {
-		updatedHosts.WriteString(newKey)
+	// Append any new keys that were not found in the existing known_hosts file
+	for keyType, key := range keys {
+		if !existingKeys[keyType] {
+			updatedHosts.WriteString("localhost " + keyType + " " + key + "\n")
+		}
 	}
 
 	// Write the updated known_hosts file
@@ -78,7 +101,7 @@ func (cs *CsiNfsService) initializeNfsServer() error {
 	log.Infof("checking status of nfs-server")
 	err := cs.updateKnownHosts()
 	if err != nil {
-		log.Warnf("Could not update known hosts, continuing.... error : %v", err)
+		log.Warnf("Could not update known hosts : %v. proceeding anyway", err)
 	}
 	// Check to see if nfs-server is active (exited ok)
 	// Note: systemctl doesn't work when invoked from a container unless you ssh localhost before executing it.
@@ -101,8 +124,8 @@ func (cs *CsiNfsService) initializeNfsServer() error {
 	}
 
 	log.Infof("nfs-server and nfs-mountd are not active, attempting to configure them")
-	// First copy the nfs.conf file to /noderoot/etc/nfs.conf. This is a 2-step process.
 
+	// First copy the nfs.conf file to /noderoot/etc/nfs.conf. This is a 2-step process.
 	// log.Infof("Configuring /etc/nfs.conf")
 	// out, err = cs.executor.ExecuteCommand("cp", "/etc/nfs.conf", "/noderoot/tmp/nfs.conf")
 	// if err != nil {
