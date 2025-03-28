@@ -26,6 +26,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var knownHostsPath = "/noderoot/root/.ssh/known_hosts"
+
 // updateKnownHosts updates the known_hosts file with the keys from ssh-keyscan.
 // This is required to support systemctl commands or else host verification will fail
 // Updates known_hosts with the keys from ssh-keyscan, if necessary.
@@ -50,7 +52,6 @@ func (cs *CsiNfsService) updateKnownHosts() error {
 	}
 
 	// Read the known_hosts file
-	knownHostsPath := "/noderoot/root/.ssh/known_hosts"
 	knownHosts, err := os.ReadFile(knownHostsPath)
 	if err != nil {
 		return fmt.Errorf("failed to read known_hosts: %v", err)
