@@ -93,7 +93,7 @@ func (cs *CsiNfsService) updateKnownHosts() error {
 	}
 
 	// Write the updated known_hosts file
-	if err := os.WriteFile(knownHostsPath, updatedHosts.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(knownHostsPath, updatedHosts.Bytes(), 0o600); err != nil {
 		return fmt.Errorf("failed to write known_hosts: %v", err)
 	}
 
