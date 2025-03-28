@@ -776,6 +776,8 @@ func TestCsiNfsService_BeforeServe(t *testing.T) {
 
 				// mocks for initializeNfsServer
 				executor := mocks.NewMockExecutor(gomock.NewController(t))
+				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh-keyscan", "-t", "rsa,ecdsa,ed25519", "localhost").Times(1).Return([]byte{}, nil)
+
 				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server").
 					Times(1).Return([]byte("Active: active"), nil)
 				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-mountd").
@@ -842,6 +844,15 @@ func TestCsiNfsService_BeforeServe(t *testing.T) {
 
 				// mocks for initializeNfsServer
 				executor := mocks.NewMockExecutor(gomock.NewController(t))
+				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh-keyscan", "-t", "rsa,ecdsa,ed25519", "localhost").Times(1).Return([]byte{}, nil)
+				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server").
+					Times(1).Return(nil, errors.New("mocked error"))
+				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-mountd").
+					Times(1).Return(nil, errors.New("mocked error"))
+				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "enable", "nfs-server").
+					Times(1).Return([]byte{}, nil)
+				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "start", "nfs-server").
+					Times(1).Return([]byte{}, nil)
 				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server").
 					Times(1).Return([]byte("Active: active"), nil)
 				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-mountd").
@@ -908,11 +919,17 @@ func TestCsiNfsService_BeforeServe(t *testing.T) {
 
 				// mocks for initializeNfsServer
 				executor := mocks.NewMockExecutor(gomock.NewController(t))
+				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh-keyscan", "-t", "rsa,ecdsa,ed25519", "localhost").Times(1).Return([]byte{}, nil)
+				// executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "enable", "nfs-server").
+				// 	Times(1).Return([]byte{}, nil)
+				// executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "enable", "nfs-mountd").
+				// 	Times(1).Return([]byte{}, nil)
 				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server").
 					Times(1).Return(nil, errors.New("mocked error"))
 				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-mountd").
 					Times(1).Return([]byte("Active: active"), nil)
-				executor.EXPECT().ExecuteCommand("cp", "/nfs.conf", "/noderoot/tmp/nfs.conf").Times(1).Return(nil, errors.New("mock error"))
+				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "enable", "nfs-server").
+					Times(1).Return(nil, errors.New("mocked error"))
 				tc.fields.executor = executor
 			},
 			wantErr:    false,
