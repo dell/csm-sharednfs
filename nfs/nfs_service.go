@@ -18,6 +18,7 @@ package nfs
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"path/filepath"
 	"strings"
@@ -26,6 +27,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	v1 "k8s.io/api/core/v1"
 
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -265,15 +267,15 @@ func finish(ctx context.Context, method, requestID string, start time.Time) {
 // to check that nodes are in a good state.
 // Note: a problem
 func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.PingResponse, error) {
-	requestID := getRequestIDFromContext(ctx)
-	start := time.Now()
-	defer finish(ctx, "Ping", requestID, start)
+	// requestID := getRequestIDFromContext(ctx)
+	// start := time.Now()
+	// defer finish(ctx, "Ping", requestID, start)
 	resp := &proto.PingResponse{
 		Ready:  true,
 		Status: "",
 	}
 
-	log.Infof("received ping nodeIpAddress %s dumpAllExports %t", req.NodeIpAddress, req.DumpAllExports)
+	// log.Infof("received ping nodeIpAddress %s dumpAllExports %t", req.NodeIpAddress, req.DumpAllExports)
 
 	if req.DumpAllExports {
 		var removed int
@@ -310,36 +312,29 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 			exportDir = filepath.Clean(exportDir)
 			log.Infof("[FERNANDO] Attempting unmount %s", exportDir)
 
-			// NOTE: Should we be unmounting and removing when migrating??
-			// err = syscall.Unmount(exportDir, 0)
-			// // out, err := nfs.executor.ExecuteCommand("umount", "--force", exportDir)
-			// if err != nil && !strings.Contains(err.Error(), "not mounted") {
-			// 	log.Errorf("Error unmounting %s: %s - still continuing...", exportDir, err.Error())
-			// }
+			serviceName := strings.Replace(exportDir, NfsExportDirectory, "", 1)
+			serviceName = strings.Replace(serviceName, "/", "", 1)
 
-			// // log.Infof("Output from umount: %s", string(out))
+			service, err := nfs.GetServiceContent(serviceName)
+			if err != nil {
+				log.Errorf("[FERNANDO] Ping: GetServiceContent returned error %s", err)
+			}
 
-			// // Remove any remnants of mount..
-			// log.Infof("[FERNANDO] Attempts to remove %s", exportDir)
-			// err = os.RemoveAll(exportDir)
-			// if err != nil {
-			// 	log.Errorf("Error removing directory %s: %s", exportDir, err)
-			// }
+			log.Infof("[FERNANDO] Ping: service %+v", service)
 
-			// exportDir = exportDir + "-dev"
-			// log.Infof("[FERNANDO] Attempting unmount %s", exportDir)
-			// err = syscall.Unmount(exportDir, 0)
-			// // out, err := nfs.executor.ExecuteCommand("umount", "--force", exportDir)
-			// if err != nil && !strings.Contains(err.Error(), "not mounted") {
-			// 	log.Errorf("Error unmounting %s: %s - still continuing...", exportDir, err.Error())
-			// }
+			driverVolumeID, ok := service.Annotations["driverVolumeID"]
+			if !ok {
+				log.Errorf("[FERNANDO] Ping: could not find driverVolumeID in Service %s", serviceName)
+			}
 
-			// log.Infof("[FERNANDO] Attempts to remove %s", exportDir)
-			// err = os.RemoveAll(exportDir)
-			// if err != nil {
-			// 	log.Errorf("Error removing directory %s: %s", exportDir, err)
-			// }
+			driverVolumeID = "nfs-" + driverVolumeID
+			log.Infof("[FERNANDO] Ping: driverVolumeID %s", driverVolumeID)
 
+			// Unmount and unstage?
+			err = nfsService.vcsi.UnmountVolume(ctx, driverVolumeID, NfsExportDirectory, map[string]string{"ServiceName": serviceName})
+			if err != nil {
+				log.Errorf("[FERNANDO] Ping: UnmountVolume returned error %s", err)
+			}
 		}
 
 		if err != nil {
@@ -350,6 +345,23 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 		log.Infof("Ping DumpAllExports removed %d exports", removed)
 	}
 	return resp, nil
+}
+
+func (nfs *nfsServer) GetServiceContent(serviceName string) (*v1.Service, error) {
+	maxAttempts := 3
+	timeout := 5 * time.Second
+
+	for i := 0; i < maxAttempts; i++ {
+		service, err := nfsService.k8sclient.GetService(context.Background(), DriverNamespace, serviceName)
+		if err == nil {
+			return service, nil
+		}
+
+		log.Errorf("[FERNANDO] GetServiceContent: could not Get Service %s: %s", serviceName, err)
+		time.Sleep(timeout)
+	}
+
+	return nil, fmt.Errorf("could not get service %s", serviceName)
 }
 
 // GetExports returns all exports matching the NfsExortDir
