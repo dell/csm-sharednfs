@@ -222,7 +222,7 @@ func (nfs *nfsServer) UnexportNfsVolume(ctx context.Context, req *proto.Unexport
 		unmountCtx, unmountCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer unmountCancel()
 		log.Infof("Calling UnmountVolume VolumeId %s exportPath %s context %+v", req.VolumeId, exportPath, req.UnexportNfsContext)
-		err = nfsService.vcsi.UnmountVolume(unmountCtx, req.VolumeId, NfsExportDirectory, req.UnexportNfsContext)
+		err = nfs.UnmountVolume(unmountCtx, req.VolumeId, serviceName)
 		if err == nil {
 			log.Infof("UnexportNfsVolume %s %s ALL GOOD", req.VolumeId, exportPath)
 			return resp, nil
@@ -331,7 +331,7 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 			log.Infof("[FERNANDO] Ping: driverVolumeID %s", driverVolumeID)
 
 			// Unmount and unstage?
-			err = nfsService.vcsi.UnmountVolume(ctx, driverVolumeID, NfsExportDirectory, map[string]string{"ServiceName": serviceName})
+			err = nfs.UnmountVolume(ctx, driverVolumeID, serviceName)
 			if err != nil {
 				log.Errorf("[FERNANDO] Ping: UnmountVolume returned error %s", err)
 			}
@@ -345,6 +345,23 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 		log.Infof("Ping DumpAllExports removed %d exports", removed)
 	}
 	return resp, nil
+}
+
+func (nfs *nfsServer) UnmountVolume(ctx context.Context, driverVolumeID, serviceName string) error {
+	maxAttempts := 5
+	timeout := 5 * time.Second
+
+	for i := 0; i < maxAttempts; i++ {
+		err := nfsService.vcsi.UnmountVolume(ctx, driverVolumeID, NfsExportDirectory, map[string]string{"ServiceName": serviceName})
+		if err == nil {
+			return nil
+		}
+
+		log.Errorf("[FERNANDO] UnmountVolume: could not Unmount %s: %s", serviceName, err)
+		time.Sleep(timeout)
+	}
+
+	return fmt.Errorf("could not unmount volume %s", driverVolumeID)
 }
 
 func (nfs *nfsServer) GetServiceContent(serviceName string) (*v1.Service, error) {
