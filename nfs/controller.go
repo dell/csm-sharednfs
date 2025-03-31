@@ -48,6 +48,8 @@ const (
 // Global variables for the controller
 var PVLock sync.Map
 
+const DEFAULT_NFS_SERVER_PORT string = "2049"
+
 func (cs *CsiNfsService) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	// Don't do anything in CreateVolume expect change the volume ID and parameters to avoid recursion
 	delete(req.Parameters, CsiNfsParameter)
@@ -245,12 +247,13 @@ func (cs *CsiNfsService) makeNfsService(ctx context.Context, namespace, name str
 
 	// Create the endpointslice
 	portName := "nfs-server"
-	port, err := strconv.Atoi(os.Getenv(EnvNFSServerPort))
+	port, err := strconv.Atoi(cs.nfsServerPort)
 	if err != nil {
 		log.Warnf("invalid port %s - err %v", os.Getenv(EnvNFSServerPort), err)
-		port = 2049 // default to 2049 if invalid port is parsed
+		port, _ = strconv.Atoi(DEFAULT_NFS_SERVER_PORT) // default to 2049 if invalid port is parsed
 	}
 	var portNumber int32 = int32(port) // #nosec : G109,G115
+
 	endpointSlice := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -385,7 +388,7 @@ func (cs *CsiNfsService) callExportNfsVolume(ctx context.Context, nodeIPAddress 
 	defer finish(ctx, "callExportNfsVolume", requestID, start)
 	// Call the node driver to do the NFS export.
 	log.Infof("Working on calling nfsExportVolume")
-	nodeClient, err := getNfsClient(nodeIPAddress, getServerPort())
+	nodeClient, err := getNfsClient(nodeIPAddress, cs.nfsServerPort)
 	if err != nil {
 		log.Errorf("Couldn't getNfsClient: %s", err.Error())
 		deleteNfsClient(nodeIPAddress)
@@ -402,7 +405,7 @@ func (cs *CsiNfsService) callUnexportNfsVolume(ctx context.Context, nodeIPAddres
 	defer finish(ctx, "callUnexportNfsVolume", requestID, start)
 	// Call the node driver to do the NFS unexport.
 	log.Infof("Working on calling nfsUnexportVolume")
-	nodeClient, err := getNfsClient(nodeIPAddress, getServerPort())
+	nodeClient, err := getNfsClient(nodeIPAddress, cs.nfsServerPort)
 	if err != nil {
 		log.Errorf("Couldn't getNfsClient: %s", err.Error())
 		deleteNfsClient(nodeIPAddress)

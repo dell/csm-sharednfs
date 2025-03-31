@@ -87,7 +87,7 @@ func (s *CsiNfsService) GetNodeStatus(address string) *NodeStatus {
 func (s *CsiNfsService) ping(pingRequest *proto.PingRequest) (*proto.PingResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), Pinger.timeout)
 	defer cancel()
-	nodeClient, err := getNfsClient(pingRequest.NodeIpAddress, getServerPort())
+	nodeClient, err := getNfsClient(pingRequest.NodeIpAddress, s.nfsServerPort)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +98,7 @@ func (s *CsiNfsService) ping(pingRequest *proto.PingRequest) (*proto.PingRespons
 func (s *CsiNfsService) getExports(nodeIP string) ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), GetExportsTimeout)
 	defer cancel()
-	nodeClient, err := getNfsClient(nodeIP, getServerPort())
+	nodeClient, err := getNfsClient(nodeIP, s.nfsServerPort)
 	if err != nil {
 		return make([]string, 0), err
 	}

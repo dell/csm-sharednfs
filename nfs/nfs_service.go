@@ -53,21 +53,8 @@ const (
 )
 
 var (
-	serverPort    = opSys.Getenv(EnvNFSClientPort)
 	serverPortMux = &sync.Mutex{}
 )
-
-func setServerPort(port string) {
-	serverPortMux.Lock()
-	defer serverPortMux.Unlock()
-	serverPort = port
-}
-
-func getServerPort() string {
-	serverPortMux.Lock()
-	defer serverPortMux.Unlock()
-	return serverPort
-}
 
 // Starts an NFS server on the specified string port
 func startNfsServiceServer(ipAddress, port string, listenFunc ListenFunc, serveFunc ServeFunc) error {

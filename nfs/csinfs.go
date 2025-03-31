@@ -61,6 +61,7 @@ type CsiNfsService struct {
 	k8sclient                    *k8s.Client
 	executor                     Executor
 	waitCreateNfsServiceInterval time.Duration
+	nfsServerPort                string
 }
 
 // OSInterface is an interface that is satisfied by various functions from the
@@ -265,6 +266,8 @@ func (s *CsiNfsService) BeforeServe(ctx context.Context, _ *gocsi.StoragePlugin,
 	}
 	log.Infof("NFS Driver Mode: %s Node Name %s", s.mode, s.nodeName)
 
+	s.nfsServerPort = os.Getenv(EnvNFSServerPort)
+
 	// Validate the global variables that must be set up
 	if err := s.validateGlobalVariables(); err != nil {
 		return err
@@ -319,7 +322,7 @@ func (s *CsiNfsService) BeforeServe(ctx context.Context, _ *gocsi.StoragePlugin,
 	// Start the NFS server listener
 	// TODO: make port configurable from environment
 	go func() {
-		err := startNfsServiceServer(s.nodeIPAddress, getServerPort(), listen, serve)
+		err := startNfsServiceServer(s.nodeIPAddress, s.nfsServerPort, listen, serve)
 		if err != nil {
 			log.Errorf("failed to start nfs service. err: %s", err.Error())
 		}
