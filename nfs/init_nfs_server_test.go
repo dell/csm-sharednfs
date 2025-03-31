@@ -164,13 +164,15 @@ func setupKnownHosts(content string) (string, error) {
 
 func TestUpdateKnownHosts(t *testing.T) {
 	tests := []struct {
-		name          string
-		initialHosts  string
-		expectedHosts string
-		service       *CsiNfsService
+		name                 string
+		initialHosts         string
+		expectedHosts        string
+		service              *CsiNfsService
+		createKnownHostsFile bool
 	}{
 		{
-			name: "Update existing ssh-rsa key",
+			name:                 "Update existing ssh-rsa key",
+			createKnownHostsFile: true,
 			service: func() *CsiNfsService {
 				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
 				keyscanOutput := `localhost ssh-rsa NEW_RSA_KEY
@@ -196,7 +198,8 @@ func TestUpdateKnownHosts(t *testing.T) {
 			`), "\t", ""),
 		},
 		{
-			name: "Add new keys",
+			name:                 "Add new keys",
+			createKnownHostsFile: true,
 			service: func() *CsiNfsService {
 				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
 				keyscanOutput := `localhost ssh-rsa NEW_RSA_KEY
@@ -216,15 +219,41 @@ func TestUpdateKnownHosts(t *testing.T) {
 			localhost ssh-ed25519 NEW_ED25519_KEY
 			`), "\t", ""),
 		},
+		{
+			name:                 "Add new keys, no known_hosts file",
+			createKnownHostsFile: false,
+			service: func() *CsiNfsService {
+				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
+				keyscanOutput := `localhost ssh-rsa NEW_RSA_KEY
+				localhost ecdsa-sha2-nistp256 NEW_ECDSA_KEY
+				localhost ssh-ed25519 NEW_ED25519_KEY
+				`
+				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh-keyscan", "-t", "rsa,ecdsa,ed25519", "localhost").Times(1).Return([]byte(keyscanOutput), nil)
+
+				return &CsiNfsService{
+					executor: mockExecutor,
+				}
+			}(),
+			initialHosts: "",
+			expectedHosts: strings.ReplaceAll(string(`# localhost:22 SSH-2.0-OpenSSH_8.4
+			localhost ssh-rsa NEW_RSA_KEY
+			localhost ecdsa-sha2-nistp256 NEW_ECDSA_KEY
+			localhost ssh-ed25519 NEW_ED25519_KEY
+			`), "\t", ""),
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set up the known_hosts file
 			var err error
-			knownHostsPath, err = setupKnownHosts(strings.ReplaceAll(tt.initialHosts, "\t", ""))
-			if err != nil {
-				t.Fatalf("failed to set up known_hosts file: %v", err)
+			if tt.createKnownHostsFile {
+				knownHostsPath, err = setupKnownHosts(tt.initialHosts)
+				if err != nil {
+					t.Fatalf("failed to set up known_hosts file: %v", err)
+				}
+			} else {
+				knownHostsPath = "/tmp/ssh_known_hosts"
 			}
 			defer os.Remove(knownHostsPath)
 

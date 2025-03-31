@@ -54,7 +54,17 @@ func (cs *CsiNfsService) updateKnownHosts() error {
 	// Read the known_hosts file
 	knownHosts, err := os.ReadFile(knownHostsPath)
 	if err != nil {
-		return fmt.Errorf("failed to read known_hosts: %v", err)
+		if os.IsNotExist(err) {
+			// Create an empty known_hosts file if it doesn't exist
+			_, err = os.Create(knownHostsPath)
+			if err != nil {
+				return fmt.Errorf("failed to create known_hosts file: %v", err)
+			}
+
+			knownHosts, _ = os.ReadFile(knownHostsPath)
+		} else {
+			return fmt.Errorf("failed to read known_hosts file: %v", err)
+		}
 	}
 
 	// Check if the keys already exist and update them if necessary
