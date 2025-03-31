@@ -17,9 +17,9 @@ limitations under the License.
 package nfs
 
 const (
-	EnvPodCIDR       = "PodCIDR"
-	EnvNodeName      = "NODE_NAME"
-	EnvCSINodeName   = "X_CSI_NODE_NAME"
-	EnvNFSServerPort = "X_CSI_NFS_SERVER_PORT"
-	EnvNFSClientPort = "X_CSI_NFS_CLIENT_PORT"
+	EnvPodCIDR              = "PodCIDR"
+	EnvNodeName             = "NODE_NAME"
+	EnvCSINodeName          = "X_CSI_NODE_NAME"
+	EnvNFSServerPort        = "X_CSI_NFS_SERVER_PORT"
+	EnvNFSClientServicePort = "X_CSI_NFS_CLIENT_PORT"
 )

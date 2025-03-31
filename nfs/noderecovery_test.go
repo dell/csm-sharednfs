@@ -181,7 +181,7 @@ func TestReassignVolume(t *testing.T) {
 					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
-					nfsServerPort: port,
+					nfsClientServicePort: port,
 				}
 
 				clientset.CoreV1().PersistentVolumes().Create(context.Background(), &v1.PersistentVolume{
@@ -213,7 +213,7 @@ func TestReassignVolume(t *testing.T) {
 					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
-					nfsServerPort: port,
+					nfsClientServicePort: port,
 				}
 
 				// Create Persistent Volume
@@ -263,7 +263,7 @@ func TestReassignVolume(t *testing.T) {
 					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
-					nfsServerPort: port,
+					nfsClientServicePort: port,
 				}
 
 				// Create Persistent Volume
@@ -312,7 +312,7 @@ func TestReassignVolume(t *testing.T) {
 					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
-					nfsServerPort: port,
+					nfsClientServicePort: port,
 				}
 
 				// Create Persistent Volume
@@ -378,7 +378,7 @@ func TestReassignVolume(t *testing.T) {
 					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
-					nfsServerPort: port,
+					nfsClientServicePort: port,
 				}
 
 				// Create Persistent Volume
@@ -444,7 +444,7 @@ func TestReassignVolume(t *testing.T) {
 					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
-					nfsServerPort: port,
+					nfsClientServicePort: port,
 				}
 
 				// Create Persistent Volume
@@ -562,7 +562,7 @@ func TestUpdateEndpointSlice(t *testing.T) {
 					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
-					nfsServerPort: port,
+					nfsClientServicePort: port,
 				}
 
 				clientset.DiscoveryV1().EndpointSlices("").Create(context.Background(), slice, metav1.CreateOptions{})
@@ -581,7 +581,7 @@ func TestUpdateEndpointSlice(t *testing.T) {
 					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
-					nfsServerPort: port,
+					nfsClientServicePort: port,
 				}
 
 				return s

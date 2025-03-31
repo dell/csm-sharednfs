@@ -294,7 +294,7 @@ func TestControllerPublishVolume(t *testing.T) {
 						Clientset: fakeK8sClient,
 					},
 					waitCreateNfsServiceInterval: 10 * time.Millisecond,
-					nfsServerPort:                port,
+					nfsClientServicePort:                port,
 				}
 				return csiNfsServce
 			}(),
@@ -365,7 +365,7 @@ func TestControllerPublishVolume(t *testing.T) {
 						Clientset: fakeK8sClient,
 					},
 					waitCreateNfsServiceInterval: 10 * time.Millisecond,
-					nfsServerPort:                port,
+					nfsClientServicePort:                port,
 				}
 				return csiNfsService
 			}(),
@@ -444,7 +444,7 @@ func TestControllerPublishVolume(t *testing.T) {
 						Clientset: fakeK8sClient,
 					},
 					waitCreateNfsServiceInterval: 10 * time.Millisecond,
-					nfsServerPort:                port,
+					nfsClientServicePort:                port,
 				}
 
 				return csiNfsService
@@ -510,7 +510,7 @@ func TestControllerPublishVolume(t *testing.T) {
 						Clientset: fakeK8sClient,
 					},
 					waitCreateNfsServiceInterval: 10 * time.Millisecond,
-					nfsServerPort:                port,
+					nfsClientServicePort:                port,
 				}
 				return csiNfsService
 			}(),
@@ -599,7 +599,7 @@ func TestControllerPublishVolume(t *testing.T) {
 						Clientset: fakeK8sClient,
 					},
 					waitCreateNfsServiceInterval: 10 * time.Millisecond,
-					nfsServerPort:                port,
+					nfsClientServicePort:                port,
 				}
 				return csiNfsService
 			}(),
@@ -701,7 +701,7 @@ func TestControllerPublishVolume(t *testing.T) {
 						Clientset: fakeK8sClient,
 					},
 					waitCreateNfsServiceInterval: 10 * time.Millisecond,
-					nfsServerPort:                port,
+					nfsClientServicePort:                port,
 				}
 				return csiNfsService
 			}(),
@@ -874,7 +874,7 @@ func TestControllerUnpublishVolume(t *testing.T) {
 			k8sclient: &k8s.Client{
 				Clientset: fakeK8sClient,
 			},
-			nfsServerPort: port,
+			nfsClientServicePort: port,
 		}
 
 		req := csi.ControllerUnpublishVolumeRequest{
@@ -918,7 +918,7 @@ func TestControllerUnpublishVolume(t *testing.T) {
 			k8sclient: &k8s.Client{
 				Clientset: fakeK8sClient,
 			},
-			nfsServerPort: port,
+			nfsClientServicePort: port,
 		}
 
 		req := csi.ControllerUnpublishVolumeRequest{

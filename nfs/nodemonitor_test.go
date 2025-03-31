@@ -67,7 +67,7 @@ func TestGetExports(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := CsiNfsService{
-				nfsServerPort: port,
+				nfsClientServicePort: port,
 			}
 
 			server := mocks.NewMockNfsServer(gomock.NewController(t))
@@ -121,7 +121,7 @@ func TestPing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := CsiNfsService{nfsServerPort: port}
+			s := CsiNfsService{nfsClientServicePort: port}
 
 			server := mocks.NewMockNfsServer(gomock.NewController(t))
 			if tt.wantErr {
@@ -212,7 +212,7 @@ func TestGetNodeExportCounts(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := CsiNfsService{nfsServerPort: port}
+			s := CsiNfsService{nfsClientServicePort: port}
 
 			tt.createServer(t)
 
@@ -314,7 +314,7 @@ func TestPinger(t *testing.T) {
 				k8sclient: &k8s.Client{
 					Clientset: clientset,
 				},
-				nfsServerPort: port,
+				nfsClientServicePort: port,
 			}
 
 			tt.createServer(t)
@@ -393,7 +393,7 @@ func TestStartNodeMonitor(t *testing.T) {
 		{
 			name: "Success: ControlPlaneNode",
 			nfsServer: func() *CsiNfsService {
-				s := &CsiNfsService{nfsServerPort: port}
+				s := &CsiNfsService{nfsClientServicePort: port}
 				return s
 			}(),
 			node: &v1.Node{
@@ -412,7 +412,7 @@ func TestStartNodeMonitor(t *testing.T) {
 		{
 			name: "Success: NonControlPlaneNode",
 			nfsServer: func() *CsiNfsService {
-				s := &CsiNfsService{nfsServerPort: port}
+				s := &CsiNfsService{nfsClientServicePort: port}
 				return s
 			}(),
 			node: &v1.Node{

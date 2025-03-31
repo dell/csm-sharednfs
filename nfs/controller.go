@@ -249,9 +249,10 @@ func (cs *CsiNfsService) makeNfsService(ctx context.Context, namespace, name str
 	portName := "nfs-server"
 	port, err := strconv.Atoi(cs.nfsServerPort)
 	if err != nil {
-		log.Warnf("invalid port %s - err %v", os.Getenv(EnvNFSServerPort), err)
+		log.Warnf("invalid port %s - err %v. Defaulting to 2049", os.Getenv(EnvNFSServerPort), err)
 		port, _ = strconv.Atoi(DefaultNFSServerPort) // default to 2049 if invalid port is parsed
 	}
+	log.Infof("Setting NFS server port to %d", port)
 	var portNumber int32 = int32(port) // #nosec : G109,G115
 
 	endpointSlice := &discoveryv1.EndpointSlice{
@@ -388,7 +389,7 @@ func (cs *CsiNfsService) callExportNfsVolume(ctx context.Context, nodeIPAddress 
 	defer finish(ctx, "callExportNfsVolume", requestID, start)
 	// Call the node driver to do the NFS export.
 	log.Infof("Working on calling nfsExportVolume")
-	nodeClient, err := getNfsClient(nodeIPAddress, cs.nfsServerPort)
+	nodeClient, err := getNfsClient(nodeIPAddress, cs.nfsClientServicePort)
 	if err != nil {
 		log.Errorf("Couldn't getNfsClient: %s", err.Error())
 		deleteNfsClient(nodeIPAddress)
@@ -405,7 +406,7 @@ func (cs *CsiNfsService) callUnexportNfsVolume(ctx context.Context, nodeIPAddres
 	defer finish(ctx, "callUnexportNfsVolume", requestID, start)
 	// Call the node driver to do the NFS unexport.
 	log.Infof("Working on calling nfsUnexportVolume")
-	nodeClient, err := getNfsClient(nodeIPAddress, cs.nfsServerPort)
+	nodeClient, err := getNfsClient(nodeIPAddress, cs.nfsClientServicePort)
 	if err != nil {
 		log.Errorf("Couldn't getNfsClient: %s", err.Error())
 		deleteNfsClient(nodeIPAddress)
