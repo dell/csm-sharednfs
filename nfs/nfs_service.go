@@ -52,9 +52,7 @@ const (
 	NfsFileModeString = "02777"
 )
 
-var (
-	serverPortMux = &sync.Mutex{}
-)
+var serverPortMux = &sync.Mutex{}
 
 // Starts an NFS server on the specified string port
 func startNfsServiceServer(ipAddress, port string, listenFunc ListenFunc, serveFunc ServeFunc) error {

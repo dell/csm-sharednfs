@@ -48,7 +48,7 @@ const (
 // Global variables for the controller
 var PVLock sync.Map
 
-const DEFAULT_NFS_SERVER_PORT string = "2049"
+const DefaultNFSServerPort string = "2049"
 
 func (cs *CsiNfsService) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	// Don't do anything in CreateVolume expect change the volume ID and parameters to avoid recursion
@@ -250,7 +250,7 @@ func (cs *CsiNfsService) makeNfsService(ctx context.Context, namespace, name str
 	port, err := strconv.Atoi(cs.nfsServerPort)
 	if err != nil {
 		log.Warnf("invalid port %s - err %v", os.Getenv(EnvNFSServerPort), err)
-		port, _ = strconv.Atoi(DEFAULT_NFS_SERVER_PORT) // default to 2049 if invalid port is parsed
+		port, _ = strconv.Atoi(DefaultNFSServerPort) // default to 2049 if invalid port is parsed
 	}
 	var portNumber int32 = int32(port) // #nosec : G109,G115
 
