@@ -47,9 +47,9 @@ var Pinger = struct {
 	maxBadPing int
 	monitorMux *sync.Mutex
 }{
-	rate:       2 * time.Second,
+	rate:       15 * time.Second,
 	timeout:    10 * time.Second,
-	maxBadPing: 10,
+	maxBadPing: 2,
 	monitorMux: &sync.Mutex{},
 }
 
@@ -90,11 +90,11 @@ func (s *CsiNfsService) ping(pingRequest *proto.PingRequest) (*proto.PingRespons
 	defer cancel()
 	nodeClient, err := getNfsClient(pingRequest.NodeIpAddress, s.nfsClientServicePort)
 	if err != nil {
-		log.Infof("[FERNANDO] ping: unable to get nfsClient: %s", err.Error())
+		log.Infof("ping: unable to get nfsClient: %s", err.Error())
 		return nil, err
 	}
-	resp, err := nodeClient.Ping(ctx, pingRequest)
-	return resp, err
+
+	return nodeClient.Ping(ctx, pingRequest)
 }
 
 func (s *CsiNfsService) getExports(nodeIP string) ([]string, error) {
@@ -118,7 +118,7 @@ func (s *CsiNfsService) pinger(node *v1.Node) {
 		return
 	}
 
-	log.Infof("[FERNANDO] Let's start Pinging for %s", node.Name)
+	log.Infof("pinger: starting on node %s", node.Name)
 
 	nodeStatus := NodeStatus{
 		nodeName:       node.Name,

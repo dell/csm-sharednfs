@@ -408,19 +408,18 @@ func (cs *CsiNfsService) callUnexportNfsVolume(ctx context.Context, nodeIPAddres
 	log.Infof("Working on calling nfsUnexportVolume")
 	nodeClient, err := getNfsClient(nodeIPAddress, cs.nfsClientServicePort)
 	if err != nil {
-		log.Errorf("[FERNANDO] Couldn't getNfsClient: %s", err.Error())
+		log.Errorf("unable to getNfsClient: %s", err.Error())
 		deleteNfsClient(nodeIPAddress)
 		return nil, err
 	}
 
 	unexportNfsVolumeResponse, err := nodeClient.UnexportNfsVolume(ctx, unexportNfsVolumeRequest)
 	if err != nil {
-		log.Errorf("[FERNANDO] UnexportNfsVolume returned error: %s for %s", err.Error(), nodeIPAddress)
+		log.Errorf("callUnexportNfsVolume: returned error %s for %s", err.Error(), nodeIPAddress)
 		return nil, err
 	}
 
-	log.Infof("[FERNANDO] callUnexportNfsVolume: unexportNfsVolume result %+v", unexportNfsVolumeResponse)
-	return unexportNfsVolumeResponse, err
+	return unexportNfsVolumeResponse, nil
 }
 
 func (cs *CsiNfsService) ControllerUnpublishVolume(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest) (*csi.ControllerUnpublishVolumeResponse, error) {
@@ -443,9 +442,13 @@ func (cs *CsiNfsService) ControllerUnpublishVolume(ctx context.Context, req *csi
 
 	service, slice, err := cs.getServiceAndSlice(ctx, serviceName)
 	if err != nil {
-		log.Infof("[FERNANDO] Endpoint slice or service might not exists: %v - slice or service might be deleted.", err)
-		// return resp, err
-		return resp, nil
+		if strings.Contains(err.Error(), "not found") {
+			log.Infof("Endpoint slice or service might not exists: %v - slice or service might be deleted.", err)
+			return resp, nil
+		}
+
+		log.Errorf("failed to get service %s: %v", serviceName, err)
+		return nil, err
 	}
 
 	var nodeIPAddress string
@@ -455,14 +458,14 @@ func (cs *CsiNfsService) ControllerUnpublishVolume(ctx context.Context, req *csi
 	}
 
 	if nodeIPAddress == "" {
-		return resp, fmt.Errorf("endpointslice apparaently had no IP addresses %v", slice)
+		return nil, fmt.Errorf("endpointslice apparaently had no IP addresses %v", slice)
 	}
 
 	// Remove this node from the service.
 	var last bool
 	last, service, err = cs.removeNodeFromNfsService(ctx, service, req)
 	if err != nil {
-		return resp, fmt.Errorf("removeNodeFromNfsService failed: %v", err)
+		return nil, fmt.Errorf("removeNodeFromNfsService failed: %v", err)
 	}
 
 	// This was the last node using the service. Unexport the underlying array volume, and remove the service and slice.
@@ -475,28 +478,28 @@ func (cs *CsiNfsService) ControllerUnpublishVolume(ctx context.Context, req *csi
 			UnexportNfsContext: unexportNfsVolumeContext,
 		}
 		unexportNfsReq.UnexportNfsContext[ServiceName] = serviceName
-		_, err := cs.callUnexportNfsVolume(ctx, nodeIPAddress, unexportNfsReq)
+		unexportNfsResp, err := cs.callUnexportNfsVolume(ctx, nodeIPAddress, unexportNfsReq)
 		if err != nil {
-			// if !strings.Contains(err.Error(), "i/o timeout") && !strings.Contains(err.Error(), "no route to host") {
-			// log.Errorf("[FERNANDO] callUnexportNfsVolume failed: %s %v: %v %s", nodeIPAddress, unexportNfsReq, unexportNfsResp, err)
-			// return resp, err
-			// }
+			if !strings.Contains(err.Error(), "i/o timeout") && !strings.Contains(err.Error(), "no route to host") {
+				log.Errorf("callUnexportNfsVolume failed: %s %v: %v %s", nodeIPAddress, unexportNfsReq, unexportNfsResp, err)
+				return resp, err
+			}
 
-			log.Infof("[FERNANDO] Node %s might be down, cleaning slice and service", nodeIPAddress)
+			log.Infof("Node %s might be down, cleaning slice and service - err %s", nodeIPAddress, err.Error())
 		}
 
 		// Delete the endpoint slice
 		err = cs.k8sclient.DeleteEndpointSlice(ctx, slice.Namespace, serviceName)
 		if err != nil {
-			log.Errorf("Could not delete EndpointSlice %s/%s", slice.Namespace, serviceName)
-			// return resp, err
+			log.Errorf("Could not delete EndpointSlice %s/%s - %s", slice.Namespace, serviceName, err.Error())
+			return nil, err
 		}
 
 		// Delete the Service
 		err = cs.k8sclient.DeleteService(ctx, service.Namespace, serviceName)
 		if err != nil {
-			log.Errorf("Could not delete Service %s/%s", service.Namespace, serviceName)
-			// return resp, err
+			log.Errorf("Could not delete Service %s/%s - %s", service.Namespace, serviceName, err.Error())
+			return nil, err
 		}
 
 		// Call the array driver to unexport the array volume. to the node

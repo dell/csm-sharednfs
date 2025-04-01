@@ -81,7 +81,7 @@ func getNfsClient(ipaddress, port string) (proto.NfsClient, error) {
 	// TODO check if this is still applicable: add support for ipv6, add support for closing the client
 	client, err := grpc.NewClient(ipaddress+":"+port, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
-		log.Errorf("[FERNANDO] Could not connect to nfsService %s:%s", ipaddress, port)
+		log.Errorf("Could not connect to nfsService %s:%s", ipaddress, port)
 		return nil, err
 	}
 
@@ -234,21 +234,16 @@ func (nfs *nfsServer) UnexportNfsVolume(ctx context.Context, req *proto.Unexport
 			return resp, nil
 		}
 
-		// // Restart the nfs-mountd. It may be out of sync.
-		// log.Infof("restarting the NFS service as it may be out of sync")
-		// err = restartNFSMountd()
-		// if err != nil {
-		// 	log.Errorf("restartNFSMountd returned error %s", err)
-		// 	return resp, err
-		// }
+		err = ResyncNFSMountd(generation)
+		if err != nil {
+			log.Errorf("ResyncNfsMountd on behalf of %s returned error %s", exportPath, err)
+			return resp, err
+		}
+
 		log.Errorf("UnmountVolume %s retry %d returned error %s", exportPath, i, err)
 	}
 
-	if err != nil {
-		log.Infof("UnmountVolume timed out after several retries")
-	}
-
-	return nil, err
+	return nil, fmt.Errorf("UnmountVolume timed out after several retries")
 }
 
 func finish(ctx context.Context, method, requestID string, start time.Time) {
@@ -267,15 +262,10 @@ func finish(ctx context.Context, method, requestID string, start time.Time) {
 // to check that nodes are in a good state.
 // Note: a problem
 func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.PingResponse, error) {
-	// requestID := getRequestIDFromContext(ctx)
-	// start := time.Now()
-	// defer finish(ctx, "Ping", requestID, start)
 	resp := &proto.PingResponse{
 		Ready:  true,
 		Status: "",
 	}
-
-	// log.Infof("received ping nodeIpAddress %s dumpAllExports %t", req.NodeIpAddress, req.DumpAllExports)
 
 	if req.DumpAllExports {
 		var removed int
@@ -284,8 +274,7 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 			return resp, err
 		}
 
-		log.Infof("[FERNANDO] Ping received dumpAllExports for %d volumes", len(exports))
-		// Should only delete if it is mounted...
+		// Remove the exports from the kernel
 		for _, export := range exports {
 			parts := strings.Split(export, " ")
 			if len(parts) >= 1 {
@@ -304,42 +293,58 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 			return resp, err
 		}
 
-		// err = restartNFSMountd()
+		time.Sleep(10 * time.Second)
+
 		for _, export := range exports {
 			parts := strings.Split(export, " ")
 			exportDir := parts[0]
 
 			exportDir = filepath.Clean(exportDir)
-			log.Infof("[FERNANDO] Attempting unmount %s", exportDir)
+			log.Infof("Attempting unmount %s", exportDir)
 
 			serviceName := strings.Replace(exportDir, NfsExportDirectory, "", 1)
 			serviceName = strings.Replace(serviceName, "/", "", 1)
 
 			service, err := nfs.GetServiceContent(serviceName)
 			if err != nil {
-				log.Errorf("[FERNANDO] Ping: GetServiceContent returned error %s", err)
+				log.Errorf("Ping: GetServiceContent returned error %s", err)
 			}
 
-			log.Infof("[FERNANDO] Ping: service %+v", service)
+			log.Infof("Ping: service %+v", service)
 
 			driverVolumeID, ok := service.Annotations["driverVolumeID"]
 			if !ok {
-				log.Errorf("[FERNANDO] Ping: could not find driverVolumeID in Service %s", serviceName)
+				log.Errorf("Ping: could not find driverVolumeID in Service %s", serviceName)
 			}
 
 			driverVolumeID = "nfs-" + driverVolumeID
-			log.Infof("[FERNANDO] Ping: driverVolumeID %s", driverVolumeID)
+			log.Infof("Ping: driverVolumeID %s", driverVolumeID)
 
-			// Unmount and unstage?
 			err = nfs.UnmountVolume(ctx, driverVolumeID, serviceName)
 			if err != nil {
-				log.Errorf("[FERNANDO] Ping: UnmountVolume returned error %s", err)
+				log.Errorf("Ping: UnmountVolume returned error %s", err)
+				resp.Ready = false
+
+				// Readd to try and remove the exports later on.
+				optionsString := strings.Join(parts[1:], " ")
+				generation, err = AddExport(parts[0], optionsString)
+				if err != nil {
+					log.Errorf("AddExport %s returned error %s", parts[0], err)
+				}
+
+				err = ResyncNFSMountd(generation)
+				if err != nil {
+					log.Errorf("ResyncNFSMountd returned error %s", err)
+				}
+
+				removed--
+				continue
 			}
 		}
 
-		if err != nil {
+		if !resp.Ready {
 			log.Errorf("Ping DumpAllExports resync failed %d exports", removed)
-			return resp, err
+			return resp, fmt.Errorf("dumping all exports failed")
 		}
 
 		log.Infof("Ping DumpAllExports removed %d exports", removed)
@@ -348,7 +353,7 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 }
 
 func (nfs *nfsServer) UnmountVolume(ctx context.Context, driverVolumeID, serviceName string) error {
-	maxAttempts := 5
+	maxAttempts := 10
 	timeout := 5 * time.Second
 
 	for i := 0; i < maxAttempts; i++ {
@@ -357,7 +362,7 @@ func (nfs *nfsServer) UnmountVolume(ctx context.Context, driverVolumeID, service
 			return nil
 		}
 
-		log.Errorf("[FERNANDO] UnmountVolume: could not Unmount %s: %s", serviceName, err)
+		log.Errorf("UnmountVolume: could not Unmount %s: %s", serviceName, err)
 		time.Sleep(timeout)
 	}
 
@@ -374,7 +379,7 @@ func (nfs *nfsServer) GetServiceContent(serviceName string) (*v1.Service, error)
 			return service, nil
 		}
 
-		log.Errorf("[FERNANDO] GetServiceContent: could not Get Service %s: %s", serviceName, err)
+		log.Errorf("GetServiceContent: could not Get Service %s: %s", serviceName, err)
 		time.Sleep(timeout)
 	}
 
