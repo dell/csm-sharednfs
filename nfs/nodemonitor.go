@@ -144,7 +144,7 @@ func (s *CsiNfsService) pinger(node *v1.Node) {
 				log.Infof("pinger: Node %s transitioned to offline", pingRequest.NodeIpAddress)
 			}
 
-			if !strings.Contains(err.Error(), "network is unreachable") && !strings.Contains(err.Error(), "error while waiting for new LB policy update") {
+			if !strings.Contains(err.Error(), "network is unreachable") && !strings.Contains(err.Error(), "error while waiting for new LB policy update") && !strings.Contains(err.Error(), "deadline exceeded while waiting for connections to become ready") {
 				nodeStatus.online = false
 				nodeStatus.badPings++
 				nodeStatus.goodPings = 0

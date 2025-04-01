@@ -293,7 +293,7 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 			return resp, err
 		}
 
-		time.Sleep(10 * time.Second)
+		time.Sleep(5 * time.Second)
 
 		for _, export := range exports {
 			parts := strings.Split(export, " ")
