@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"maps"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -249,7 +248,7 @@ func (cs *CsiNfsService) makeNfsService(ctx context.Context, namespace, name str
 	portName := "nfs-server"
 	port, err := strconv.Atoi(cs.nfsServerPort)
 	if err != nil {
-		log.Warnf("invalid port %s - err %v. Defaulting to 2049", os.Getenv(EnvNFSServerPort), err)
+		log.Warnf("invalid port %s - err %v. Defaulting to 2049", cs.nfsServerPort, err)
 		port, _ = strconv.Atoi(DefaultNFSServerPort) // default to 2049 if invalid port is parsed
 	}
 	log.Infof("Setting NFS server port to %d", port)
