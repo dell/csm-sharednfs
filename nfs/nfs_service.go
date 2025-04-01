@@ -54,6 +54,12 @@ const (
 	NfsFileModeString = "02777"
 )
 
+var (
+	timeout            time.Duration = 5 * time.Second
+	maxUnmountAttempts int           = 10
+	maxGetSvcAttempts  int           = 3
+)
+
 // Starts an NFS server on the specified string port
 func startNfsServiceServer(ipAddress, port string, listenFunc ListenFunc, serveFunc ServeFunc) error {
 	log.Infof("csinfs: Calling Listen on %s", ipAddress+":"+port)
@@ -293,8 +299,6 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 			return resp, err
 		}
 
-		time.Sleep(5 * time.Second)
-
 		for _, export := range exports {
 			parts := strings.Split(export, " ")
 			exportDir := parts[0]
@@ -325,7 +329,7 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 				log.Errorf("Ping: UnmountVolume returned error %s", err)
 				resp.Ready = false
 
-				// Readd to try and remove the exports later on.
+				// Ready to try and remove the exports later on.
 				optionsString := strings.Join(parts[1:], " ")
 				generation, err = AddExport(parts[0], optionsString)
 				if err != nil {
@@ -353,10 +357,7 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 }
 
 func (nfs *nfsServer) UnmountVolume(ctx context.Context, driverVolumeID, serviceName string) error {
-	maxAttempts := 10
-	timeout := 5 * time.Second
-
-	for i := 0; i < maxAttempts; i++ {
+	for i := 0; i < maxUnmountAttempts; i++ {
 		err := nfsService.vcsi.UnmountVolume(ctx, driverVolumeID, NfsExportDirectory, map[string]string{"ServiceName": serviceName})
 		if err == nil {
 			return nil
@@ -370,10 +371,7 @@ func (nfs *nfsServer) UnmountVolume(ctx context.Context, driverVolumeID, service
 }
 
 func (nfs *nfsServer) GetServiceContent(serviceName string) (*v1.Service, error) {
-	maxAttempts := 3
-	timeout := 5 * time.Second
-
-	for i := 0; i < maxAttempts; i++ {
+	for i := 0; i < maxGetSvcAttempts; i++ {
 		service, err := nfsService.k8sclient.GetService(context.Background(), DriverNamespace, serviceName)
 		if err == nil {
 			return service, nil
