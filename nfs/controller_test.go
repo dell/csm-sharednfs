@@ -19,9 +19,12 @@ package nfs
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"errors"
 	"log"
+	"math/big"
 	reflect "reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -222,6 +225,10 @@ func TestUnlockPV(t *testing.T) {
 }
 
 func TestControllerPublishVolume(t *testing.T) {
+	port := func() string {
+		nBig, _ := rand.Int(rand.Reader, big.NewInt(9000))
+		return strconv.Itoa(int(nBig.Int64() + 1000))
+	}()
 	tests := []struct {
 		name          string
 		csiNfsService *CsiNfsService
@@ -229,13 +236,14 @@ func TestControllerPublishVolume(t *testing.T) {
 		expectedRes   *csi.ControllerPublishVolumeResponse
 		expectedErr   error
 		createServer  func(*testing.T)
+		port          func()
 	}{
 		{
 			name: "Valid volume request",
 			createServer: func(t *testing.T) {
 				server := mocks.NewMockNfsServer(gomock.NewController(t))
 				server.EXPECT().ExportNfsVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&proto.ExportNfsVolumeResponse{}, nil)
-				createMockServer(t, "127.0.0.1", server)
+				createMockServer(t, "127.0.0.1", port, server)
 				nodeIPAddress["127.0.0.1"] = &NodeStatus{
 					online:     true,
 					inRecovery: false,
@@ -286,6 +294,7 @@ func TestControllerPublishVolume(t *testing.T) {
 						Clientset: fakeK8sClient,
 					},
 					waitCreateNfsServiceInterval: 10 * time.Millisecond,
+					nfsClientServicePort:         port,
 				}
 				return csiNfsServce
 			}(),
@@ -317,7 +326,7 @@ func TestControllerPublishVolume(t *testing.T) {
 			createServer: func(t *testing.T) {
 				server := mocks.NewMockNfsServer(gomock.NewController(t))
 				server.EXPECT().ExportNfsVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&proto.ExportNfsVolumeResponse{}, nil)
-				createMockServer(t, "127.0.0.1", server)
+				createMockServer(t, "127.0.0.1", port, server)
 				nodeIPAddress["127.0.0.1"] = &NodeStatus{
 					online:     true,
 					inRecovery: false,
@@ -350,14 +359,15 @@ func TestControllerPublishVolume(t *testing.T) {
 					}, nil
 				})
 
-				csiNfsServce := &CsiNfsService{
+				csiNfsService := &CsiNfsService{
 					vcsi: mockService,
 					k8sclient: &k8s.Client{
 						Clientset: fakeK8sClient,
 					},
 					waitCreateNfsServiceInterval: 10 * time.Millisecond,
+					nfsClientServicePort:         port,
 				}
-				return csiNfsServce
+				return csiNfsService
 			}(),
 			req: &csi.ControllerPublishVolumeRequest{
 				VolumeId: "test-volume",
@@ -387,7 +397,7 @@ func TestControllerPublishVolume(t *testing.T) {
 			createServer: func(t *testing.T) {
 				server := mocks.NewMockNfsServer(gomock.NewController(t))
 				server.EXPECT().ExportNfsVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&proto.ExportNfsVolumeResponse{}, nil)
-				createMockServer(t, "127.0.0.1", server)
+				createMockServer(t, "127.0.0.1", port, server)
 				nodeIPAddress["127.0.0.1"] = &NodeStatus{
 					online:     true,
 					inRecovery: false,
@@ -428,14 +438,16 @@ func TestControllerPublishVolume(t *testing.T) {
 					}, nil
 				})
 
-				csiNfsServce := &CsiNfsService{
+				csiNfsService := &CsiNfsService{
 					vcsi: mockService,
 					k8sclient: &k8s.Client{
 						Clientset: fakeK8sClient,
 					},
 					waitCreateNfsServiceInterval: 10 * time.Millisecond,
+					nfsClientServicePort:         port,
 				}
-				return csiNfsServce
+
+				return csiNfsService
 			}(),
 			req: &csi.ControllerPublishVolumeRequest{
 				VolumeId: "test-volume",
@@ -465,7 +477,7 @@ func TestControllerPublishVolume(t *testing.T) {
 			createServer: func(t *testing.T) {
 				server := mocks.NewMockNfsServer(gomock.NewController(t))
 				server.EXPECT().ExportNfsVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&proto.ExportNfsVolumeResponse{}, nil)
-				createMockServer(t, "127.0.0.1", server)
+				createMockServer(t, "127.0.0.1", port, server)
 				nodeIPAddress["127.0.0.1"] = &NodeStatus{
 					online:     true,
 					inRecovery: false,
@@ -492,14 +504,15 @@ func TestControllerPublishVolume(t *testing.T) {
 					return true, nil, nil
 				})
 
-				csiNfsServce := &CsiNfsService{
+				csiNfsService := &CsiNfsService{
 					vcsi: mockService,
 					k8sclient: &k8s.Client{
 						Clientset: fakeK8sClient,
 					},
 					waitCreateNfsServiceInterval: 10 * time.Millisecond,
+					nfsClientServicePort:         port,
 				}
-				return csiNfsServce
+				return csiNfsService
 			}(),
 			req: &csi.ControllerPublishVolumeRequest{
 				VolumeId: "test-volume",
@@ -524,7 +537,7 @@ func TestControllerPublishVolume(t *testing.T) {
 			createServer: func(t *testing.T) {
 				server := mocks.NewMockNfsServer(gomock.NewController(t))
 				server.EXPECT().ExportNfsVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&proto.ExportNfsVolumeResponse{}, nil)
-				createMockServer(t, "127.0.0.1", server)
+				createMockServer(t, "127.0.0.1", port, server)
 				nodeIPAddress["127.0.0.1"] = &NodeStatus{
 					online:     true,
 					inRecovery: false,
@@ -580,14 +593,15 @@ func TestControllerPublishVolume(t *testing.T) {
 					}, nil
 				})
 
-				csiNfsServce := &CsiNfsService{
+				csiNfsService := &CsiNfsService{
 					vcsi: mockService,
 					k8sclient: &k8s.Client{
 						Clientset: fakeK8sClient,
 					},
 					waitCreateNfsServiceInterval: 10 * time.Millisecond,
+					nfsClientServicePort:         port,
 				}
-				return csiNfsServce
+				return csiNfsService
 			}(),
 			req: &csi.ControllerPublishVolumeRequest{
 				VolumeId: "test-volume",
@@ -617,7 +631,7 @@ func TestControllerPublishVolume(t *testing.T) {
 			createServer: func(t *testing.T) {
 				server := mocks.NewMockNfsServer(gomock.NewController(t))
 				server.EXPECT().ExportNfsVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&proto.ExportNfsVolumeResponse{}, nil)
-				createMockServer(t, "127.0.0.1", server)
+				createMockServer(t, "127.0.0.1", port, server)
 				nodeIPAddress["127.0.0.1"] = &NodeStatus{
 					online:     true,
 					inRecovery: false,
@@ -681,14 +695,15 @@ func TestControllerPublishVolume(t *testing.T) {
 					}, nil
 				})
 
-				csiNfsServce := &CsiNfsService{
+				csiNfsService := &CsiNfsService{
 					vcsi: mockService,
 					k8sclient: &k8s.Client{
 						Clientset: fakeK8sClient,
 					},
 					waitCreateNfsServiceInterval: 10 * time.Millisecond,
+					nfsClientServicePort:         port,
 				}
-				return csiNfsServce
+				return csiNfsService
 			}(),
 			req: &csi.ControllerPublishVolumeRequest{
 				VolumeId: "test-volume",
@@ -739,6 +754,11 @@ func TestControllerPublishVolume(t *testing.T) {
 }
 
 func TestControllerUnpublishVolume(t *testing.T) {
+	port := func() string {
+		nBig, _ := rand.Int(rand.Reader, big.NewInt(9000))
+		return strconv.Itoa(int(nBig.Int64() + 1000))
+	}()
+
 	t.Run("endpoint error", func(t *testing.T) {
 		ctx := context.Background()
 		fakeK8sClient := fake.NewClientset()
@@ -848,12 +868,13 @@ func TestControllerUnpublishVolume(t *testing.T) {
 		mockVcsiService := mocks.NewMockService(gomock.NewController(t))
 		mockVcsiService.EXPECT().ControllerUnpublishVolume(gomock.Any(), gomock.Any()).Times(1).Return(&csi.ControllerUnpublishVolumeResponse{}, nil)
 
-		createMockServer(t, "127.0.0.1", mockNfsServer)
-		csiNfsServce := &CsiNfsService{
+		createMockServer(t, "127.0.0.1", port, mockNfsServer)
+		csiNfsService := &CsiNfsService{
 			vcsi: mockVcsiService,
 			k8sclient: &k8s.Client{
 				Clientset: fakeK8sClient,
 			},
+			nfsClientServicePort: port,
 		}
 
 		req := csi.ControllerUnpublishVolumeRequest{
@@ -861,7 +882,7 @@ func TestControllerUnpublishVolume(t *testing.T) {
 			NodeId:   "test-node",
 		}
 
-		_, err := csiNfsServce.ControllerUnpublishVolume(ctx, &req)
+		_, err := csiNfsService.ControllerUnpublishVolume(ctx, &req)
 		assert.Equal(t, nil, err)
 	})
 
@@ -889,7 +910,7 @@ func TestControllerUnpublishVolume(t *testing.T) {
 		}, metav1.CreateOptions{})
 		mockServer := mocks.NewMockNfsServer(gomock.NewController(t))
 		mockServer.EXPECT().UnexportNfsVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&proto.UnexportNfsVolumeResponse{}, nil)
-		createMockServer(t, "127.0.0.1", mockServer)
+		createMockServer(t, "127.0.0.1", port, mockServer)
 		mockVcsiService := mocks.NewMockService(gomock.NewController(t))
 		mockVcsiService.EXPECT().ControllerUnpublishVolume(gomock.Any(), gomock.Any()).Times(0).Return(&csi.ControllerUnpublishVolumeResponse{}, nil)
 		csiNfsServce := &CsiNfsService{
@@ -897,6 +918,7 @@ func TestControllerUnpublishVolume(t *testing.T) {
 			k8sclient: &k8s.Client{
 				Clientset: fakeK8sClient,
 			},
+			nfsClientServicePort: port,
 		}
 
 		req := csi.ControllerUnpublishVolumeRequest{

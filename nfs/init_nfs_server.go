@@ -17,17 +17,110 @@ limitations under the License.
 package nfs
 
 import (
+	"bufio"
+	"bytes"
+	"fmt"
+	"os"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
 )
 
+var knownHostsPath = "/noderoot/root/.ssh/known_hosts"
+
+// updateKnownHosts updates the known_hosts file with the keys from ssh-keyscan.
+// This is required to support systemctl commands or else host verification will fail
+// Updates known_hosts with the keys from ssh-keyscan, if necessary.
+func (cs *CsiNfsService) updateKnownHosts() error {
+	// Run ssh-keyscan
+	cmd, err := cs.executor.ExecuteCommand("chroot", "/noderoot", "ssh-keyscan", "-t", "rsa,ecdsa,ed25519", "localhost")
+	// Run ssh-keyscan for multiple key types
+	if err != nil {
+		return fmt.Errorf("failed to run ssh-keyscan: %v", err)
+	}
+	// Extract the keys from the ssh-keyscan output
+	output := strings.TrimSpace(string(cmd))
+	lines := strings.Split(output, "\n")
+	keys := make(map[string]string)
+	for _, line := range lines {
+		if strings.Contains(line, "localhost") && !strings.HasPrefix(line, "#") {
+			parts := strings.SplitN(line, " ", 3)
+			if len(parts) == 3 {
+				keys[parts[1]] = parts[2] // Store key type and key
+			}
+		}
+	}
+
+	// Read the known_hosts file
+	knownHosts, err := os.ReadFile(knownHostsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Create an empty known_hosts file if it doesn't exist
+			_, err = os.Create(knownHostsPath)
+			if err != nil {
+				return fmt.Errorf("failed to create known_hosts file: %v", err)
+			}
+
+			knownHosts, _ = os.ReadFile(knownHostsPath)
+		} else {
+			return fmt.Errorf("failed to read known_hosts file: %v", err)
+		}
+	}
+
+	// Check if the keys already exist and update them if necessary
+	scanner := bufio.NewScanner(bytes.NewReader(knownHosts))
+	var updatedHosts bytes.Buffer
+	existingKeys := make(map[string]bool)
+	for scanner.Scan() {
+		line := scanner.Text()
+		// Ignore lines that are comments and end with \n
+		if strings.HasPrefix(line, "#") && strings.HasSuffix(line, "\n") {
+			continue
+		}
+		updated := false
+		for keyType, key := range keys {
+			if strings.Contains(line, "localhost") && strings.Contains(line, keyType) {
+				// Replace the existing localhost entry with the new key
+				updatedHosts.WriteString("localhost " + keyType + " " + key + "\n")
+				updated = true
+				existingKeys[keyType] = true // Mark this key type as updated
+				break
+			}
+		}
+		if !updated {
+			updatedHosts.WriteString(line + "\n")
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("failed to scan known_hosts: %v", err)
+	}
+
+	// Append any new keys that were not found in the existing known_hosts file
+	for keyType, key := range keys {
+		if !existingKeys[keyType] {
+			updatedHosts.WriteString("localhost " + keyType + " " + key + "\n")
+		}
+	}
+
+	// Write the updated known_hosts file
+	if err := os.WriteFile(knownHostsPath, updatedHosts.Bytes(), 0o600); err != nil {
+		return fmt.Errorf("failed to write known_hosts: %v", err)
+	}
+
+	return nil
+}
+
 // init_nfs_server uses systemctl to initialize an nfs server if necessary
 func (cs *CsiNfsService) initializeNfsServer() error {
 	log.Infof("checking status of nfs-server")
+	err := cs.updateKnownHosts()
+	if err != nil {
+		log.Warnf("Could not update known hosts : %v. proceeding anyway", err)
+	}
 	// Check to see if nfs-server is active (exited ok)
 	// Note: systemctl doesn't work when invoked from a container unless you ssh localhost before executing it.
 	// You will get the message "Failed to connect to bus: No data available" because systemctl must think it's on the local host.
+
 	restartNfsServer := false
 	out, err := cs.executor.ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server")
 	if err != nil || !strings.Contains(string(out), "Active: active") {
@@ -41,21 +134,14 @@ func (cs *CsiNfsService) initializeNfsServer() error {
 
 	// Reinitialize the NFS server if necessary
 	if !restartNfsServer {
+		log.Infof("nfs-server and nfs-mountd are active")
 		return nil
 	}
 
-	// First copy the nfs.conf file to /noderoot/etc/nfs.conf. This is a 2-step process.
-	log.Infof("Configuring /etc/nfs.conf")
-	out, err = cs.executor.ExecuteCommand("cp", "/nfs.conf", "/noderoot/tmp/nfs.conf")
-	if err != nil {
-		log.Errorf("Couldn't copy /nfs.conf to /noderoot/tmp/nfs.conf: %s", string(out))
-		return err
-	}
-	out, err = cs.executor.ExecuteCommand("chroot", "/noderoot", "cp", "/tmp/nfs.conf", "/etc/nfs.conf")
-	if err != nil {
-		log.Errorf("Couldn't copy /tmp/nfs.conf to /etc/nfs.conf: %s", string(out))
-		return err
-	}
+	log.Infof("nfs-server and nfs-mountd are not active, attempting to configure them")
+
+	// "/noderoot/etc/" on the container has the same nfs.conf file as the host.
+	// Attempt to start the nfs server and mountd services.
 
 	// Now enable the nfs-server
 	out, err = cs.executor.ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "enable", "nfs-server")
@@ -83,5 +169,7 @@ func (cs *CsiNfsService) initializeNfsServer() error {
 		log.Infof("nfs-mountd not active: %s", string(out))
 		return err
 	}
+
+	log.Infof("nfs-server and nfs-mountd are now active")
 	return nil
 }

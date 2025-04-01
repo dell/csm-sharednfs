@@ -52,23 +52,6 @@ const (
 	NfsFileModeString = "02777"
 )
 
-var (
-	serverPort    = "2050"
-	serverPortMux = &sync.Mutex{}
-)
-
-func setServerPort(port string) {
-	serverPortMux.Lock()
-	defer serverPortMux.Unlock()
-	serverPort = port
-}
-
-func getServerPort() string {
-	serverPortMux.Lock()
-	defer serverPortMux.Unlock()
-	return serverPort
-}
-
 // Starts an NFS server on the specified string port
 func startNfsServiceServer(ipAddress, port string, listenFunc ListenFunc, serveFunc ServeFunc) error {
 	log.Infof("csinfs: Calling Listen on %s", ipAddress+":"+port)
@@ -93,10 +76,8 @@ func startNfsServiceServer(ipAddress, port string, listenFunc ListenFunc, serveF
 }
 
 func getNfsClient(ipaddress, port string) (proto.NfsClient, error) {
-	// TODO: add support for ipv6, add support for closing the client
+	// TODO check if this is still applicable: add support for ipv6, add support for closing the client
 	client, err := grpc.NewClient(ipaddress+":"+port, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
-	// below line is AI generated with deprecations
-	// conn, err := grpc.Dial(ipaddress+":"+port, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		log.Errorf("Could not connect to nfsService %s:%s", ipaddress, port)
 		return nil, err

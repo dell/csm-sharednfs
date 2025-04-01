@@ -424,7 +424,7 @@ func TestNFSPing(t *testing.T) {
 			}(),
 			executor: func() *mocks.MockExecutor {
 				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
-				mockExecutor.EXPECT().ExecuteCommand(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return([]byte{}, nil)
+				mockExecutor.EXPECT().ExecuteCommand(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return([]byte{}, nil)
 				return mockExecutor
 			}(),
 			osMock: func() *mocks.MockOSInterface {
@@ -482,7 +482,7 @@ func TestNFSPing(t *testing.T) {
 			}(),
 			executor: func() *mocks.MockExecutor {
 				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
-				mockExecutor.EXPECT().ExecuteCommand(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return([]byte{}, nil)
+				mockExecutor.EXPECT().ExecuteCommand(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return([]byte{}, nil)
 				return mockExecutor
 			}(),
 			osMock: func() *mocks.MockOSInterface {

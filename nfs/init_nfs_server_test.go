@@ -18,6 +18,8 @@ package nfs
 
 import (
 	"errors"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/dell/csm-hbnfs/nfs/mocks"
@@ -35,10 +37,9 @@ func TestInitializeNfsServer(t *testing.T) {
 			name: "Valid NFS server - all commands successful",
 			nfsServer: func() *CsiNfsService {
 				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
+				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh-keyscan", "-t", "rsa,ecdsa,ed25519", "localhost").Times(1).Return([]byte{}, nil)
 				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server").Times(1).Return([]byte{}, nil)
 				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-mountd").Times(1).Return([]byte{}, nil)
-				mockExecutor.EXPECT().ExecuteCommand("cp", "/nfs.conf", "/noderoot/tmp/nfs.conf").Times(1).Return([]byte{}, nil)
-				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "cp", "/tmp/nfs.conf", "/etc/nfs.conf").Times(1).Return([]byte{}, nil)
 				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "enable", "nfs-server").Times(1).Return([]byte{}, nil)
 				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "start", "nfs-server").Times(1).Return([]byte{}, nil)
 				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server").Times(1).Return([]byte("Active: active"), nil)
@@ -54,6 +55,7 @@ func TestInitializeNfsServer(t *testing.T) {
 			name: "Server is active, no need to initialize",
 			nfsServer: func() *CsiNfsService {
 				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
+				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh-keyscan", "-t", "rsa,ecdsa,ed25519", "localhost").Times(1).Return([]byte{}, nil)
 				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server").Times(1).Return([]byte("Active: active"), nil)
 				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-mountd").Times(1).Return([]byte{}, nil)
 
@@ -64,72 +66,12 @@ func TestInitializeNfsServer(t *testing.T) {
 			expectedErr: nil,
 		},
 		{
-			name: "Error copying nfs.conf file",
-			nfsServer: func() *CsiNfsService {
-				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
-				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server").Times(1).Return([]byte{}, nil)
-				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-mountd").Times(1).Return([]byte{}, nil)
-				mockExecutor.EXPECT().ExecuteCommand("cp", "/nfs.conf", "/noderoot/tmp/nfs.conf").Times(1).Return([]byte{}, errors.New("error copying nfs.conf"))
-
-				return &CsiNfsService{
-					executor: mockExecutor,
-				}
-			}(),
-			expectedErr: errors.New("error copying nfs.conf"),
-		},
-		{
-			name: "Error with chroot copying nfs.conf file",
-			nfsServer: func() *CsiNfsService {
-				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
-				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server").Times(1).Return([]byte{}, nil)
-				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-mountd").Times(1).Return([]byte{}, nil)
-				mockExecutor.EXPECT().ExecuteCommand("cp", "/nfs.conf", "/noderoot/tmp/nfs.conf").Times(1).Return([]byte{}, nil)
-				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "cp", "/tmp/nfs.conf", "/etc/nfs.conf").Times(1).Return([]byte{}, errors.New("error copying nfs.conf"))
-
-				return &CsiNfsService{
-					executor: mockExecutor,
-				}
-			}(),
-			expectedErr: errors.New("error copying nfs.conf"),
-		},
-		{
-			name: "Error with chroot copying nfs.conf file",
-			nfsServer: func() *CsiNfsService {
-				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
-				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server").Times(1).Return([]byte{}, nil)
-				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-mountd").Times(1).Return([]byte{}, nil)
-				mockExecutor.EXPECT().ExecuteCommand("cp", "/nfs.conf", "/noderoot/tmp/nfs.conf").Times(1).Return([]byte{}, nil)
-				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "cp", "/tmp/nfs.conf", "/etc/nfs.conf").Times(1).Return([]byte{}, errors.New("error copying nfs.conf"))
-
-				return &CsiNfsService{
-					executor: mockExecutor,
-				}
-			}(),
-			expectedErr: errors.New("error copying nfs.conf"),
-		},
-		{
-			name: "Error with chroot copying nfs.conf file",
-			nfsServer: func() *CsiNfsService {
-				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
-				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server").Times(1).Return([]byte{}, nil)
-				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-mountd").Times(1).Return([]byte{}, nil)
-				mockExecutor.EXPECT().ExecuteCommand("cp", "/nfs.conf", "/noderoot/tmp/nfs.conf").Times(1).Return([]byte{}, nil)
-				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "cp", "/tmp/nfs.conf", "/etc/nfs.conf").Times(1).Return([]byte{}, errors.New("error copying nfs.conf"))
-
-				return &CsiNfsService{
-					executor: mockExecutor,
-				}
-			}(),
-			expectedErr: errors.New("error copying nfs.conf"),
-		},
-		{
 			name: "Error with chroot ssh enable nfs-server service",
 			nfsServer: func() *CsiNfsService {
 				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
+				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh-keyscan", "-t", "rsa,ecdsa,ed25519", "localhost").Times(1).Return([]byte{}, nil)
 				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server").Times(1).Return([]byte{}, nil)
 				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-mountd").Times(1).Return([]byte{}, nil)
-				mockExecutor.EXPECT().ExecuteCommand("cp", "/nfs.conf", "/noderoot/tmp/nfs.conf").Times(1).Return([]byte{}, nil)
-				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "cp", "/tmp/nfs.conf", "/etc/nfs.conf").Times(1).Return([]byte{}, nil)
 				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "enable", "nfs-server").Times(1).Return([]byte{}, errors.New("error chroot ssh enable"))
 				return &CsiNfsService{
 					executor: mockExecutor,
@@ -141,10 +83,9 @@ func TestInitializeNfsServer(t *testing.T) {
 			name: "Error with chroot ssh start nfs-server service",
 			nfsServer: func() *CsiNfsService {
 				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
+				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh-keyscan", "-t", "rsa,ecdsa,ed25519", "localhost").Times(1).Return([]byte{}, nil)
 				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server").Times(1).Return([]byte{}, nil)
 				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-mountd").Times(1).Return([]byte{}, nil)
-				mockExecutor.EXPECT().ExecuteCommand("cp", "/nfs.conf", "/noderoot/tmp/nfs.conf").Times(1).Return([]byte{}, nil)
-				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "cp", "/tmp/nfs.conf", "/etc/nfs.conf").Times(1).Return([]byte{}, nil)
 				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "enable", "nfs-server").Times(1).Return([]byte{}, nil)
 				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "start", "nfs-server").Times(1).Return([]byte{}, errors.New("error chroot ssh start"))
 
@@ -158,10 +99,9 @@ func TestInitializeNfsServer(t *testing.T) {
 			name: "Error with chroot ssh status nfs-server service",
 			nfsServer: func() *CsiNfsService {
 				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
+				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh-keyscan", "-t", "rsa,ecdsa,ed25519", "localhost").Times(1).Return([]byte{}, nil)
 				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server").Times(1).Return([]byte{}, nil)
 				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-mountd").Times(1).Return([]byte{}, nil)
-				mockExecutor.EXPECT().ExecuteCommand("cp", "/nfs.conf", "/noderoot/tmp/nfs.conf").Times(1).Return([]byte{}, nil)
-				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "cp", "/tmp/nfs.conf", "/etc/nfs.conf").Times(1).Return([]byte{}, nil)
 				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "enable", "nfs-server").Times(1).Return([]byte{}, nil)
 				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "start", "nfs-server").Times(1).Return([]byte{}, nil)
 				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server").Times(1).Return([]byte{}, errors.New("error chroot ssh status"))
@@ -176,10 +116,9 @@ func TestInitializeNfsServer(t *testing.T) {
 			name: "Error with chroot ssh status nfs-mountd service",
 			nfsServer: func() *CsiNfsService {
 				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
+				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh-keyscan", "-t", "rsa,ecdsa,ed25519", "localhost").Times(1).Return([]byte{}, nil)
 				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server").Times(1).Return([]byte{}, nil)
 				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-mountd").Times(1).Return([]byte{}, nil)
-				mockExecutor.EXPECT().ExecuteCommand("cp", "/nfs.conf", "/noderoot/tmp/nfs.conf").Times(1).Return([]byte{}, nil)
-				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "cp", "/tmp/nfs.conf", "/etc/nfs.conf").Times(1).Return([]byte{}, nil)
 				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "enable", "nfs-server").Times(1).Return([]byte{}, nil)
 				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "start", "nfs-server").Times(1).Return([]byte{}, nil)
 				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server").Times(1).Return([]byte("Active: active"), nil)
@@ -195,8 +134,145 @@ func TestInitializeNfsServer(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := test.nfsServer.initializeNfsServer()
+			knownHostsFile := `# localhost:22 SSH-2.0-OpenSSH_8.4
+			localhost ssh-rsa OLD_KEY
+			localhost ecdsa-sha2-nistp256 OLD_ECDSA_KEY
+			localhost ssh-ed25519 OLD_ED25519_KEY
+			`
+			var err error
+			knownHostsPath, err = setupKnownHosts(strings.ReplaceAll(knownHostsFile, "\t", ""))
+			if err != nil {
+				t.Fatalf("failed to set up known_hosts file: %v", err)
+			}
+			defer os.Remove(knownHostsPath)
+			err = test.nfsServer.initializeNfsServer()
 			assert.Equal(t, test.expectedErr, err)
+		})
+	}
+}
+
+func setupKnownHosts(content string) (string, error) {
+	tmpFile, err := os.CreateTemp("", "known_hosts")
+	if err != nil {
+		return "", err
+	}
+	if _, err := tmpFile.WriteString(content); err != nil {
+		return "", err
+	}
+	return tmpFile.Name(), nil
+}
+
+func TestUpdateKnownHosts(t *testing.T) {
+	tests := []struct {
+		name                 string
+		initialHosts         string
+		expectedHosts        string
+		service              *CsiNfsService
+		createKnownHostsFile bool
+	}{
+		{
+			name:                 "Update existing ssh-rsa key",
+			createKnownHostsFile: true,
+			service: func() *CsiNfsService {
+				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
+				keyscanOutput := `localhost ssh-rsa NEW_RSA_KEY
+				localhost ecdsa-sha2-nistp256 NEW_ECDSA_KEY
+				localhost ssh-ed25519 NEW_ED25519_KEY`
+
+				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh-keyscan", "-t", "rsa,ecdsa,ed25519", "localhost").Times(1).Return([]byte(keyscanOutput), nil)
+
+				return &CsiNfsService{
+					executor: mockExecutor,
+				}
+			}(),
+			initialHosts: `# localhost:22 SSH-2.0-OpenSSH_8.4
+			localhost ssh-rsa OLD_KEY
+			localhost ecdsa-sha2-nistp256 OLD_ECDSA_KEY
+			localhost ssh-ed25519 OLD_ED25519_KEY
+			`,
+
+			expectedHosts: strings.ReplaceAll(string(`# localhost:22 SSH-2.0-OpenSSH_8.4
+			localhost ssh-rsa NEW_RSA_KEY
+			localhost ecdsa-sha2-nistp256 NEW_ECDSA_KEY
+			localhost ssh-ed25519 NEW_ED25519_KEY
+			`), "\t", ""),
+		},
+		{
+			name:                 "Add new keys",
+			createKnownHostsFile: true,
+			service: func() *CsiNfsService {
+				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
+				keyscanOutput := `localhost ssh-rsa NEW_RSA_KEY
+				localhost ecdsa-sha2-nistp256 NEW_ECDSA_KEY
+				localhost ssh-ed25519 NEW_ED25519_KEY
+				`
+				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh-keyscan", "-t", "rsa,ecdsa,ed25519", "localhost").Times(1).Return([]byte(keyscanOutput), nil)
+
+				return &CsiNfsService{
+					executor: mockExecutor,
+				}
+			}(),
+			initialHosts: `# localhost:22 SSH-2.0-OpenSSH_8.4`,
+			expectedHosts: strings.ReplaceAll(string(`# localhost:22 SSH-2.0-OpenSSH_8.4
+			localhost ssh-rsa NEW_RSA_KEY
+			localhost ecdsa-sha2-nistp256 NEW_ECDSA_KEY
+			localhost ssh-ed25519 NEW_ED25519_KEY
+			`), "\t", ""),
+		},
+		{
+			name:                 "Add new keys, no known_hosts file",
+			createKnownHostsFile: false,
+			service: func() *CsiNfsService {
+				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
+				keyscanOutput := `localhost ssh-rsa NEW_RSA_KEY
+				localhost ecdsa-sha2-nistp256 NEW_ECDSA_KEY
+				localhost ssh-ed25519 NEW_ED25519_KEY
+				`
+				mockExecutor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh-keyscan", "-t", "rsa,ecdsa,ed25519", "localhost").Times(1).Return([]byte(keyscanOutput), nil)
+
+				return &CsiNfsService{
+					executor: mockExecutor,
+				}
+			}(),
+			initialHosts: "",
+			expectedHosts: strings.ReplaceAll(string(`# localhost:22 SSH-2.0-OpenSSH_8.4
+			localhost ssh-rsa NEW_RSA_KEY
+			localhost ecdsa-sha2-nistp256 NEW_ECDSA_KEY
+			localhost ssh-ed25519 NEW_ED25519_KEY
+			`), "\t", ""),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set up the known_hosts file
+			var err error
+			if tt.createKnownHostsFile {
+				knownHostsPath, err = setupKnownHosts(tt.initialHosts)
+				if err != nil {
+					t.Fatalf("failed to set up known_hosts file: %v", err)
+				}
+			} else {
+				knownHostsPath = "/tmp/ssh_known_hosts"
+			}
+			defer os.Remove(knownHostsPath)
+
+			// Run the updateKnownHosts function
+			err = tt.service.updateKnownHosts()
+			if err != nil {
+				t.Fatalf("updateKnownHosts() error : %v ", err)
+			}
+
+			// Read the updated known_hosts file
+			updatedHosts, err := os.ReadFile(knownHostsPath)
+			if err != nil {
+				t.Fatalf("failed to read updated known_hosts file: %v", err)
+			}
+
+			// Compare the updated known_hosts file with the expected content
+			if err != nil && string(updatedHosts) != tt.expectedHosts {
+				t.Errorf("updateKnownHosts() failed :\n got = %v\n, want %v", string(updatedHosts), string(tt.expectedHosts))
+			}
 		})
 	}
 }
