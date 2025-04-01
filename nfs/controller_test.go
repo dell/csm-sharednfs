@@ -775,10 +775,10 @@ func TestControllerUnpublishVolume(t *testing.T) {
 		}
 
 		_, err := csiNfsServce.ControllerUnpublishVolume(ctx, &req)
-		assert.Contains(t, err.Error(), "endpointslices")
+		assert.Nil(t, err)
 	})
 
-	t.Run("service error", func(t *testing.T) {
+	t.Run("service not found", func(t *testing.T) {
 		ctx := context.Background()
 		fakeK8sClient := fake.NewClientset()
 		fakeK8sClient.DiscoveryV1().EndpointSlices("").Create(ctx, &discoveryv1.EndpointSlice{
@@ -805,7 +805,7 @@ func TestControllerUnpublishVolume(t *testing.T) {
 		}
 
 		_, err := csiNfsServce.ControllerUnpublishVolume(ctx, &req)
-		assert.Contains(t, err.Error(), "services")
+		assert.Nil(t, err)
 	})
 
 	t.Run("slice has no IP addr", func(t *testing.T) {

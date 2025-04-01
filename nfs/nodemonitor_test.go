@@ -19,6 +19,7 @@ package nfs
 import (
 	"context"
 	"crypto/rand"
+	"fmt"
 	"math/big"
 	"net"
 	"reflect"
@@ -282,7 +283,7 @@ func TestPinger(t *testing.T) {
 			name: "Success - Recovery attempt",
 			createServer: func(t *testing.T) {
 				server := mocks.NewMockNfsServer(gomock.NewController(t))
-				server.EXPECT().Ping(gomock.Any(), gomock.Any()).Times(3).Return(&proto.PingResponse{Ready: false}, nil)
+				server.EXPECT().Ping(gomock.Any(), gomock.Any()).Times(3).Return(&proto.PingResponse{Ready: false}, fmt.Errorf("failed to ping"))
 				server.EXPECT().GetExports(gomock.Any(), gomock.Any()).Times(1).Return(nil, status.Errorf(codes.Internal, "unable to get exports"))
 
 				createMockServer(t, localHostIP, port, server)
