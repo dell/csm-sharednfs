@@ -19,7 +19,9 @@ package nfs
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"strings"
+	"syscall"
 	"time"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
@@ -109,16 +111,49 @@ func (ns *CsiNfsService) nodePublishVolume(ctx context.Context, req *csi.NodePub
 	// Mounting the volume
 	mountSource := service.Spec.ClusterIP + ":" + NfsExportDirectory + "/" + serviceName
 	log.Infof("csi-nfs NodePublish attempting mount %s to %s", mountSource, target)
-	mountContext, mountCancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer mountCancel()
-	output, err = ns.executor.ExecuteCommandContext(mountContext, "mount", "-t", "nfs4", mountSource, target)
-	// TODO maybe put fsType nfs4 in gofsutil
-	if err != nil {
-		log.Errorf("csi-nfs NodePublish mount %s failed %s", mountSource, err)
-		log.Infof("mount command output:\n%s", string(output))
-		return resp, err
+
+	//	mountContext, mountCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	//	defer mountCancel()
+	//	output, err = ns.executor.ExecuteCommandContext(mountContext, "mount", "-t", "nfs4", mountSource, target)
+	//	// TODO maybe put fsType nfs4 in gofsutil
+
+	cmd := exec.Command("mount", "-t", "nfs4", mountSource, target)
+	log.Infof("%s NodePublish mount mommand args: %v", req.VolumeId, cmd.Args)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+	type cmdResult struct {
+		outb []byte
+		err  error
 	}
-	log.Infof("csi-nfs NodePublish %s target %s ALL GOOD", req.VolumeId, req.TargetPath)
+	var result cmdResult
+	cmdDone := make(chan cmdResult, 1)
+	go func() {
+		outb, err := cmd.CombinedOutput()
+		cmdDone <- cmdResult{outb, err}
+	}()
+	select {
+	case <-time.After(10 * time.Second):
+		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		log.Errorf("mount command timed out %v", cmd.Args)
+		return &csi.NodePublishVolumeResponse{}, fmt.Errorf("NodePublich Mount command timeout")
+	case result = <-cmdDone:
+		if result.err != nil {
+			if result.outb != nil {
+				log.Infof("%s NodePublish Mount command returned %s", req.VolumeId, string(result.outb))
+			}
+			log.Infof("%s NodePublish Mount failed: %v : %s", req.VolumeId, cmd.Args, result.err.Error())
+			return &csi.NodePublishVolumeResponse{}, result.err
+		} else {
+			log.Infof("NodePublish Mount ALL GOOD result: %v : %s", cmd.Args, string(result.outb))
+		}
+	}
+
+	//	if err != nil {
+	//		log.Errorf("csi-nfs NodePublish mount %s failed %s", mountSource, err)
+	//		log.Infof("mount command output:\n%s", string(output))
+	//		return resp, err
+	//	}
+	//	log.Infof("csi-nfs NodePublish %s target %s ALL GOOD", req.VolumeId, req.TargetPath)
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
