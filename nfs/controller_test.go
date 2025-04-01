@@ -958,12 +958,13 @@ func TestControllerUnpublishVolume(t *testing.T) {
 
 		mockVcsiService := mocks.NewMockService(gomock.NewController(t))
 
-		createMockServer(t, "127.0.0.1", mockNfsServer)
+		createMockServer(t, "127.0.0.1", port, mockNfsServer)
 		csiNfsServce := &CsiNfsService{
 			vcsi: mockVcsiService,
 			k8sclient: &k8s.Client{
 				Clientset: fakeK8sClient,
 			},
+			nfsClientServicePort: port,
 		}
 
 		req := csi.ControllerUnpublishVolumeRequest{
@@ -1002,12 +1003,13 @@ func TestControllerUnpublishVolume(t *testing.T) {
 		mockVcsiService := mocks.NewMockService(gomock.NewController(t))
 		mockVcsiService.EXPECT().ControllerUnpublishVolume(gomock.Any(), gomock.Any()).Times(1).Return(&csi.ControllerUnpublishVolumeResponse{}, nil)
 
-		createMockServer(t, "127.0.0.1", mockNfsServer)
+		createMockServer(t, "127.0.0.1", port, mockNfsServer)
 		csiNfsServce := &CsiNfsService{
 			vcsi: mockVcsiService,
 			k8sclient: &k8s.Client{
 				Clientset: fakeK8sClient,
 			},
+			nfsClientServicePort: port,
 		}
 
 		req := csi.ControllerUnpublishVolumeRequest{
