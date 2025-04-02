@@ -145,6 +145,9 @@ func (cs *CsiNfsService) ControllerPublishVolume(ctx context.Context,
 
 	// Look to see if there is an existing endpoint slice, and then associated service.
 	service, endpoint, err := cs.getServiceAndSlice(ctx, serviceName)
+	if err != nil {
+		log.Infof("endpointSlice %s/%s not found: %+v", namespace, serviceName, endpoint)
+	}
 
 	publishContext := map[string]string{
 		"name":       name,
@@ -175,26 +178,24 @@ func (cs *CsiNfsService) ControllerPublishVolume(ctx context.Context,
 	}
 
 	log.Info("either service or endpoint slice already existed... will just exit")
-
-	// Pick the NFS server as the incoming node request
-	// Create and endpoint slice
-	// Create a service in the namespace of the requestor (where to get the namespace)
 	return &csi.ControllerPublishVolumeResponse{}, nil
 }
 
 func (cs *CsiNfsService) getServiceAndSlice(ctx context.Context, serviceName string) (*corev1.Service, *discoveryv1.EndpointSlice, error) {
 	namespace := DriverNamespace
 	// Look to see if there is an existing endpoint slice, and then associated service.
-	endpoint, endpointErr := cs.k8sclient.GetEndpointSlice(ctx, namespace, serviceName)
-	if endpointErr != nil {
+	endpoint, err := cs.k8sclient.GetEndpointSlice(ctx, namespace, serviceName)
+	if err != nil {
 		log.Infof("endpointSlice %s/%s not found: %+v", namespace, serviceName, endpoint)
-		return nil, nil, endpointErr
+		return nil, nil, err
 	}
-	service, serviceErr := cs.k8sclient.GetService(ctx, namespace, serviceName)
-	if serviceErr != nil {
+
+	service, err := cs.k8sclient.GetService(ctx, namespace, serviceName)
+	if err != nil {
 		log.Infof("service_err %s/%s not found: %+v", namespace, serviceName, service)
-		return nil, endpoint, serviceErr
+		return nil, nil, err
 	}
+
 	return service, endpoint, nil
 }
 
@@ -252,7 +253,7 @@ func (cs *CsiNfsService) makeNfsService(ctx context.Context, namespace, name str
 		port, _ = strconv.Atoi(DefaultNFSServerPort) // default to 2049 if invalid port is parsed
 	}
 	log.Infof("Setting NFS server port to %d", port)
-	var portNumber int32 = int32(port) // #nosec : G109,G115
+	portNumber := int32(port) // #nosec : G109,G115
 
 	endpointSlice := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
@@ -390,7 +391,7 @@ func (cs *CsiNfsService) callExportNfsVolume(ctx context.Context, nodeIPAddress 
 	log.Infof("Working on calling nfsExportVolume")
 	nodeClient, err := getNfsClient(nodeIPAddress, cs.nfsClientServicePort)
 	if err != nil {
-		log.Errorf("Couldn't getNfsClient: %s", err.Error())
+		log.Errorf("[callExportNfsVolume] couldn't getNfsClient: %s", err.Error())
 		deleteNfsClient(nodeIPAddress)
 		return nil, err
 	}
@@ -407,13 +408,18 @@ func (cs *CsiNfsService) callUnexportNfsVolume(ctx context.Context, nodeIPAddres
 	log.Infof("Working on calling nfsUnexportVolume")
 	nodeClient, err := getNfsClient(nodeIPAddress, cs.nfsClientServicePort)
 	if err != nil {
-		log.Errorf("Couldn't getNfsClient: %s", err.Error())
+		log.Errorf("unable to getNfsClient: %s", err.Error())
 		deleteNfsClient(nodeIPAddress)
 		return nil, err
 	}
+
 	unexportNfsVolumeResponse, err := nodeClient.UnexportNfsVolume(ctx, unexportNfsVolumeRequest)
-	log.Infof("unexportNfsVolume result %+v ... %v", unexportNfsVolumeResponse, err)
-	return unexportNfsVolumeResponse, err
+	if err != nil {
+		log.Errorf("callUnexportNfsVolume: returned error %s for %s", err.Error(), nodeIPAddress)
+		return nil, err
+	}
+
+	return unexportNfsVolumeResponse, nil
 }
 
 func (cs *CsiNfsService) ControllerUnpublishVolume(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest) (*csi.ControllerUnpublishVolumeResponse, error) {
@@ -436,22 +442,30 @@ func (cs *CsiNfsService) ControllerUnpublishVolume(ctx context.Context, req *csi
 
 	service, slice, err := cs.getServiceAndSlice(ctx, serviceName)
 	if err != nil {
-		return resp, err
+		if strings.Contains(err.Error(), "not found") {
+			log.Infof("Endpoint slice or service might not exist: %v - slice or service might be deleted.", err)
+			return resp, nil
+		}
+
+		log.Errorf("failed to get service %s: %v", serviceName, err)
+		return nil, err
 	}
+
 	var nodeIPAddress string
 	if len(slice.Endpoints) > 0 {
 		address := slice.Endpoints[0]
 		nodeIPAddress = address.Addresses[0]
 	}
+
 	if nodeIPAddress == "" {
-		return resp, fmt.Errorf("endpointslice apparaently had no IP addresses %v", slice)
+		return nil, fmt.Errorf("no IP address found for endpointslice: %v", slice)
 	}
 
 	// Remove this node from the service.
 	var last bool
 	last, service, err = cs.removeNodeFromNfsService(ctx, service, req)
 	if err != nil {
-		return resp, fmt.Errorf("removeNodeFromNfsService failed: %v", err)
+		return nil, fmt.Errorf("removeNodeFromNfsService failed: %v", err)
 	}
 
 	// This was the last node using the service. Unexport the underlying array volume, and remove the service and slice.
@@ -464,29 +478,37 @@ func (cs *CsiNfsService) ControllerUnpublishVolume(ctx context.Context, req *csi
 			UnexportNfsContext: unexportNfsVolumeContext,
 		}
 		unexportNfsReq.UnexportNfsContext[ServiceName] = serviceName
-		unexportNfsResp, err := cs.callUnexportNfsVolume(ctx, nodeIPAddress, unexportNfsReq)
+		_, err := cs.callUnexportNfsVolume(ctx, nodeIPAddress, unexportNfsReq)
 		if err != nil {
-			log.Infof("callUnexportNfsVolume failed: %s %v: %v %s", nodeIPAddress, unexportNfsReq, unexportNfsResp, err)
-			return resp, err
+			if !strings.Contains(err.Error(), "i/o timeout") && !strings.Contains(err.Error(), "no route to host") {
+				log.Errorf("[ControllerUnpublish] callUnexportNfsVolume failed: IP: %s, req: %+v, err: %s", nodeIPAddress, unexportNfsReq, err.Error())
+				return resp, err
+			}
+
+			log.Infof("Node %s might be down, cleaning slice and service - err %s", nodeIPAddress, err.Error())
 		}
+
 		// Delete the endpoint slice
 		err = cs.k8sclient.DeleteEndpointSlice(ctx, slice.Namespace, serviceName)
 		if err != nil {
-			log.Errorf("Could not delete EndpointSlice %s/%s", slice.Namespace, serviceName)
-			return resp, err
+			log.Errorf("could not delete EndpointSlice %s/%s - %s", slice.Namespace, serviceName, err.Error())
+			return nil, err
 		}
+
 		// Delete the Service
 		err = cs.k8sclient.DeleteService(ctx, service.Namespace, serviceName)
 		if err != nil {
-			log.Errorf("Could not delete Service %s/%s", service.Namespace, serviceName)
-			return resp, err
+			log.Errorf("could not delete Service %s/%s - %s", service.Namespace, serviceName, err.Error())
+			return nil, err
 		}
+
 		// Call the array driver to unexport the array volume. to the node
 		arrayID := ToArrayVolumeID(req.VolumeId)
 		req.VolumeId = arrayID
 		subreq := req
 		return cs.vcsi.ControllerUnpublishVolume(ctx, subreq)
 	}
+
 	return resp, nil
 }
 

@@ -201,10 +201,12 @@ func DeleteExport(directory string) (int64, error) {
 			return generation, fmt.Errorf("failed to write to %s: %v", exportsDir, err)
 		}
 	}
+
 	err = file2.Close()
 	if err != nil {
 		return generation, fmt.Errorf("failed to close %s: %v", exportsDir, err)
 	}
+
 	log.Infof("DeleteExport %s completed", directory)
 	generation = generation + 1
 	return generation, nil
@@ -246,7 +248,7 @@ func isNfsMountdActive() bool {
 	return err == nil
 }
 
-// RestartNFSMountd doesn't actually restart the server.
+// ResyncNFSMountd doesn't actually restart the server.
 // Instead it issues the exportfs -r command resync the kernel NFS with /noderoot/etc/exports.
 func ResyncNFSMountd(generation int64) error {
 	exportsLock.Lock()

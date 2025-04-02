@@ -19,9 +19,11 @@ package nfs
 import (
 	"context"
 	"crypto/rand"
+	"fmt"
 	"math/big"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -151,7 +153,7 @@ func TestReassignVolume(t *testing.T) {
 	tests := []struct {
 		name      string
 		configure func(t *testing.T) *CsiNfsService
-		wantErr   bool
+		wantErr   error
 	}{
 		{
 			name: "Error: Unable to get Persisent Volume",
@@ -168,7 +170,7 @@ func TestReassignVolume(t *testing.T) {
 
 				return s
 			},
-			wantErr: true,
+			wantErr: fmt.Errorf("reassignVolume: couldn't Get volume"),
 		},
 		{
 			name: "Error: Unable to get Service",
@@ -200,7 +202,7 @@ func TestReassignVolume(t *testing.T) {
 
 				return s
 			},
-			wantErr: true,
+			wantErr: fmt.Errorf("reassignVolume: could not Get Service"),
 		},
 		{
 			name: "Error: Unable to execute ControllerUnpublishVolume",
@@ -249,7 +251,7 @@ func TestReassignVolume(t *testing.T) {
 
 				return s
 			},
-			wantErr: true,
+			wantErr: fmt.Errorf("ControllerUnpublishVolume failed error"),
 		},
 
 		{
@@ -299,7 +301,7 @@ func TestReassignVolume(t *testing.T) {
 
 				return s
 			},
-			wantErr: true,
+			wantErr: fmt.Errorf("reassignVolume could not Get the selected node"),
 		},
 		{
 			name: "Error: Unable to execute ControllerPublishVolume",
@@ -365,7 +367,7 @@ func TestReassignVolume(t *testing.T) {
 
 				return s
 			},
-			wantErr: true,
+			wantErr: fmt.Errorf("got error on ControllerPublishVolume"),
 		},
 		{
 			name: "Error: Unable to callExportNfsVolume",
@@ -431,7 +433,7 @@ func TestReassignVolume(t *testing.T) {
 
 				return s
 			},
-			wantErr: true,
+			wantErr: fmt.Errorf("callExportNfsVolume failed"),
 		},
 		{
 			name: "Success: Reassign volume with proper export",
@@ -506,7 +508,7 @@ func TestReassignVolume(t *testing.T) {
 
 				return s
 			},
-			wantErr: false,
+			wantErr: nil,
 		},
 	}
 
@@ -514,10 +516,12 @@ func TestReassignVolume(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := tt.configure(t)
 
-			res := s.reassignVolume(slice)
+			err := s.reassignVolume(slice)
 
-			if tt.wantErr && res {
-				t.Error("expecting error but reassign is successful")
+			if tt.wantErr != nil {
+				if !strings.Contains(err.Error(), tt.wantErr.Error()) {
+					t.Error("error response is not as expected")
+				}
 			}
 		})
 	}

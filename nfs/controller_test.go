@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"log"
 	"math/big"
 	reflect "reflect"
@@ -37,6 +38,7 @@ import (
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -775,10 +777,10 @@ func TestControllerUnpublishVolume(t *testing.T) {
 		}
 
 		_, err := csiNfsServce.ControllerUnpublishVolume(ctx, &req)
-		assert.Contains(t, err.Error(), "endpointslices")
+		assert.Nil(t, err)
 	})
 
-	t.Run("service error", func(t *testing.T) {
+	t.Run("service not found", func(t *testing.T) {
 		ctx := context.Background()
 		fakeK8sClient := fake.NewClientset()
 		fakeK8sClient.DiscoveryV1().EndpointSlices("").Create(ctx, &discoveryv1.EndpointSlice{
@@ -805,7 +807,7 @@ func TestControllerUnpublishVolume(t *testing.T) {
 		}
 
 		_, err := csiNfsServce.ControllerUnpublishVolume(ctx, &req)
-		assert.Contains(t, err.Error(), "services")
+		assert.Nil(t, err)
 	})
 
 	t.Run("slice has no IP addr", func(t *testing.T) {
@@ -838,7 +840,7 @@ func TestControllerUnpublishVolume(t *testing.T) {
 		}
 
 		_, err := csiNfsServce.ControllerUnpublishVolume(ctx, &req)
-		assert.Contains(t, err.Error(), "endpointslice apparaently had no IP addresses")
+		assert.Contains(t, err.Error(), "no IP address found for endpointslice")
 	})
 
 	t.Run("remove last client", func(t *testing.T) {
@@ -913,6 +915,95 @@ func TestControllerUnpublishVolume(t *testing.T) {
 		createMockServer(t, "127.0.0.1", port, mockServer)
 		mockVcsiService := mocks.NewMockService(gomock.NewController(t))
 		mockVcsiService.EXPECT().ControllerUnpublishVolume(gomock.Any(), gomock.Any()).Times(0).Return(&csi.ControllerUnpublishVolumeResponse{}, nil)
+		csiNfsServce := &CsiNfsService{
+			vcsi: mockVcsiService,
+			k8sclient: &k8s.Client{
+				Clientset: fakeK8sClient,
+			},
+			nfsClientServicePort: port,
+		}
+
+		req := csi.ControllerUnpublishVolumeRequest{
+			VolumeId: "test-volume",
+			NodeId:   "test-node",
+		}
+
+		_, err := csiNfsServce.ControllerUnpublishVolume(ctx, &req)
+		assert.Equal(t, nil, err)
+	})
+
+	t.Run("error: callUnexportNfsVolume", func(t *testing.T) {
+		ctx := context.Background()
+		fakeK8sClient := fake.NewClientset()
+		fakeK8sClient.DiscoveryV1().EndpointSlices("").Create(ctx, &discoveryv1.EndpointSlice{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-volume",
+			},
+			Endpoints: []discoveryv1.Endpoint{
+				{
+					Addresses: []string{"127.0.0.1"},
+				},
+			},
+		}, metav1.CreateOptions{})
+		fakeK8sClient.CoreV1().Services("").Create(ctx, &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-volume",
+				Labels: map[string]string{
+					"client/" + "test-node": "test-node",
+				},
+			},
+		}, metav1.CreateOptions{})
+		mockNfsServer := mocks.NewMockNfsServer(gomock.NewController(t))
+		mockNfsServer.EXPECT().UnexportNfsVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(nil, fmt.Errorf("error"))
+
+		mockVcsiService := mocks.NewMockService(gomock.NewController(t))
+
+		createMockServer(t, "127.0.0.1", port, mockNfsServer)
+		csiNfsServce := &CsiNfsService{
+			vcsi: mockVcsiService,
+			k8sclient: &k8s.Client{
+				Clientset: fakeK8sClient,
+			},
+			nfsClientServicePort: port,
+		}
+
+		req := csi.ControllerUnpublishVolumeRequest{
+			VolumeId: "test-volume",
+			NodeId:   "test-node",
+		}
+
+		_, err := csiNfsServce.ControllerUnpublishVolume(ctx, &req)
+		assert.NotNil(t, err)
+	})
+
+	t.Run("success: node down, continue", func(t *testing.T) {
+		ctx := context.Background()
+		fakeK8sClient := fake.NewClientset()
+		fakeK8sClient.DiscoveryV1().EndpointSlices("").Create(ctx, &discoveryv1.EndpointSlice{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-volume",
+			},
+			Endpoints: []discoveryv1.Endpoint{
+				{
+					Addresses: []string{"127.0.0.1"},
+				},
+			},
+		}, metav1.CreateOptions{})
+		fakeK8sClient.CoreV1().Services("").Create(ctx, &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-volume",
+				Labels: map[string]string{
+					"client/" + "test-node": "test-node",
+				},
+			},
+		}, metav1.CreateOptions{})
+		mockNfsServer := mocks.NewMockNfsServer(gomock.NewController(t))
+		mockNfsServer.EXPECT().UnexportNfsVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(nil, fmt.Errorf("no route to host"))
+
+		mockVcsiService := mocks.NewMockService(gomock.NewController(t))
+		mockVcsiService.EXPECT().ControllerUnpublishVolume(gomock.Any(), gomock.Any()).Times(1).Return(&csi.ControllerUnpublishVolumeResponse{}, nil)
+
+		createMockServer(t, "127.0.0.1", port, mockNfsServer)
 		csiNfsServce := &CsiNfsService{
 			vcsi: mockVcsiService,
 			k8sclient: &k8s.Client{
@@ -1176,4 +1267,33 @@ func TestControllerGetVolume(t *testing.T) {
 			assert.Equal(t, test.expectedErr, err)
 		})
 	}
+}
+
+func TestAddNodeToNfsService(t *testing.T) {
+	ctx := context.Background()
+	t.Run("Error updating service", func(t *testing.T) {
+		fakeK8sClient := fake.NewClientset()
+		cs := &CsiNfsService{
+			k8sclient: &k8s.Client{
+				Clientset: fakeK8sClient,
+			},
+		}
+
+		service := &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "test-namespace",
+				Name:      "test-service",
+				Labels:    map[string]string{},
+			},
+		}
+
+		req := &csi.ControllerPublishVolumeRequest{
+			NodeId: "test-node",
+		}
+
+		updatedService, err := cs.addNodeToNfsService(ctx, service, req)
+
+		assert.Error(t, err)
+		assert.Nil(t, updatedService)
+	})
 }
