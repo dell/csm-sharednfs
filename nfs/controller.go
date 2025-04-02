@@ -253,7 +253,7 @@ func (cs *CsiNfsService) makeNfsService(ctx context.Context, namespace, name str
 		port, _ = strconv.Atoi(DefaultNFSServerPort) // default to 2049 if invalid port is parsed
 	}
 	log.Infof("Setting NFS server port to %d", port)
-	var portNumber int32 = int32(port) // #nosec : G109,G115
+	portNumber := int32(port) // #nosec : G109,G115
 
 	endpointSlice := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{

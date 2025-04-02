@@ -55,9 +55,9 @@ const (
 )
 
 var (
-	timeout            time.Duration = 5 * time.Second
-	maxUnmountAttempts int           = 10
-	maxGetSvcAttempts  int           = 3
+	timeout            = 5 * time.Second
+	maxUnmountAttempts = 10
+	maxGetSvcAttempts  = 3
 )
 
 // Starts an NFS server on the specified string port
