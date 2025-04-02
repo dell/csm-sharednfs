@@ -840,7 +840,7 @@ func TestControllerUnpublishVolume(t *testing.T) {
 		}
 
 		_, err := csiNfsServce.ControllerUnpublishVolume(ctx, &req)
-		assert.Contains(t, err.Error(), "endpointslice apparaently had no IP addresses")
+		assert.Contains(t, err.Error(), "no IP address found for endpointslice")
 	})
 
 	t.Run("remove last client", func(t *testing.T) {

@@ -123,7 +123,7 @@ func (s *CsiNfsService) pinger(node *v1.Node) {
 	nodeStatus := NodeStatus{
 		nodeName:       node.Name,
 		nodeIP:         node.Status.Addresses[0].Address,
-		online:         true,
+		online:         false,
 		status:         "",
 		dumpingExports: false,
 	}

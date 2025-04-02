@@ -391,7 +391,7 @@ func (cs *CsiNfsService) callExportNfsVolume(ctx context.Context, nodeIPAddress 
 	log.Infof("Working on calling nfsExportVolume")
 	nodeClient, err := getNfsClient(nodeIPAddress, cs.nfsClientServicePort)
 	if err != nil {
-		log.Errorf("Couldn't getNfsClient: %s", err.Error())
+		log.Errorf("[callExportNfsVolume] couldn't getNfsClient: %s", err.Error())
 		deleteNfsClient(nodeIPAddress)
 		return nil, err
 	}
@@ -443,7 +443,7 @@ func (cs *CsiNfsService) ControllerUnpublishVolume(ctx context.Context, req *csi
 	service, slice, err := cs.getServiceAndSlice(ctx, serviceName)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			log.Infof("Endpoint slice or service might not exists: %v - slice or service might be deleted.", err)
+			log.Infof("Endpoint slice or service might not exist: %v - slice or service might be deleted.", err)
 			return resp, nil
 		}
 
@@ -458,7 +458,7 @@ func (cs *CsiNfsService) ControllerUnpublishVolume(ctx context.Context, req *csi
 	}
 
 	if nodeIPAddress == "" {
-		return nil, fmt.Errorf("endpointslice apparaently had no IP addresses %v", slice)
+		return nil, fmt.Errorf("no IP address found for endpointslice: %v", slice)
 	}
 
 	// Remove this node from the service.
@@ -478,10 +478,10 @@ func (cs *CsiNfsService) ControllerUnpublishVolume(ctx context.Context, req *csi
 			UnexportNfsContext: unexportNfsVolumeContext,
 		}
 		unexportNfsReq.UnexportNfsContext[ServiceName] = serviceName
-		unexportNfsResp, err := cs.callUnexportNfsVolume(ctx, nodeIPAddress, unexportNfsReq)
+		_, err := cs.callUnexportNfsVolume(ctx, nodeIPAddress, unexportNfsReq)
 		if err != nil {
 			if !strings.Contains(err.Error(), "i/o timeout") && !strings.Contains(err.Error(), "no route to host") {
-				log.Errorf("callUnexportNfsVolume failed: %s %v: %v %s", nodeIPAddress, unexportNfsReq, unexportNfsResp, err)
+				log.Errorf("[ControllerUnpublish] callUnexportNfsVolume failed: IP: %s, req: %+v, err: %s", nodeIPAddress, unexportNfsReq, err.Error())
 				return resp, err
 			}
 
@@ -491,14 +491,14 @@ func (cs *CsiNfsService) ControllerUnpublishVolume(ctx context.Context, req *csi
 		// Delete the endpoint slice
 		err = cs.k8sclient.DeleteEndpointSlice(ctx, slice.Namespace, serviceName)
 		if err != nil {
-			log.Errorf("Could not delete EndpointSlice %s/%s - %s", slice.Namespace, serviceName, err.Error())
+			log.Errorf("could not delete EndpointSlice %s/%s - %s", slice.Namespace, serviceName, err.Error())
 			return nil, err
 		}
 
 		// Delete the Service
 		err = cs.k8sclient.DeleteService(ctx, service.Namespace, serviceName)
 		if err != nil {
-			log.Errorf("Could not delete Service %s/%s - %s", service.Namespace, serviceName, err.Error())
+			log.Errorf("could not delete Service %s/%s - %s", service.Namespace, serviceName, err.Error())
 			return nil, err
 		}
 

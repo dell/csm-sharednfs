@@ -245,7 +245,7 @@ func (s *CsiNfsService) updateEndpointSlice(ctx context.Context, slice *discover
 			return nil
 		}
 
-		log.Errorf("Update EndpointSlice %s address %s retries %d failed: %s", slice.Name, slice.Labels["nodeIP"], retries, err)
+		log.Errorf("[updateEndpointSlice] slice %s, address %s, retries %d failed: %s", slice.Name, slice.Labels["nodeIP"], retries, err)
 		time.Sleep(endpointSliceTimeout)
 	}
 
