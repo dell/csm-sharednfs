@@ -62,7 +62,9 @@ func (cs *CsiNfsService) CreateVolume(ctx context.Context, req *csi.CreateVolume
 	subreq.VolumeCapabilities = []*csi.VolumeCapability{blockVolumeCapability}
 	log.Infof("Calling vcsi.CreateVolume parameters %+v capabilities %v", subreq.Parameters, subreq.VolumeCapabilities)
 	resp, err := cs.vcsi.CreateVolume(ctx, subreq)
-	resp.Volume.VolumeId = ArrayToNFSVolumeID(resp.Volume.VolumeId)
+	if err == nil {
+		resp.Volume.VolumeId = ArrayToNFSVolumeID(resp.Volume.VolumeId)
+	}
 	log.Infof("Returning CreateVolume error %s resp %+v", err, resp)
 	return resp, err
 }

@@ -177,7 +177,8 @@ func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsV
 	options := "(rw)"
 	optionsString := nfsService.podCIDR + options
 	// Add the link-local overlay network for OCP. TODO: add conditionally?
-	optionsString = optionsString + " 169.254.0.0/17(rw)"
+	optionsString = optionsString + " 169.254.0.0/17" + options
+	optionsString = optionsString + " 127.0.0.1/32" + options
 
 	log.Infof("ExportNfsVolume Calling AddExport %s/ %s", path, optionsString)
 	generation, err = AddExport(path+"/", optionsString)
