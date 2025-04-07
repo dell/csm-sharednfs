@@ -317,12 +317,15 @@ func (s *CsiNfsService) BeforeServe(ctx context.Context, _ *gocsi.StoragePlugin,
 		}
 	}
 
-	if err = s.initializeNfsServer(); err != nil {
+	// Intentionally commented. initializeNfsServer invokes systemctl calls, which does not work yet on OCP clusters
+	// and some K8s deployments. Needs to be investigated if automatic configuration of NFS servers is desired.
+	/*
+		if err = s.initializeNfsServer(); err != nil {
 		log.Errorf("host nfs-server failed to initialize")
-	}
+		 }
+	*/
 
 	// Start the NFS server listener
-	// TODO: make port configurable from environment
 	go func() {
 		err := startNfsServiceServer(s.nodeIPAddress, s.nfsClientServicePort, listen, serve)
 		if err != nil {
