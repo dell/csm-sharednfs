@@ -32,7 +32,7 @@ Note: This project can be compiled with CSI Powerstore driver only. Other platfo
 * [Support](#support)
 * [Security](https://github.com/dell/csm/blob/main/docs/SECURITY.md)
 * [Building](#building)
-* [Preequisites](#prerequisites)
+* [Prerequisites](#prerequisites)
 * [Driver Installation](#driver-installation)
 * [Using Driver](#using-driver)
 * [Documentation](#documentation)
