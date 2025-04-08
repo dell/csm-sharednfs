@@ -21,7 +21,7 @@ Once deployed, csm-hbnfs allows users to:
     - Mount NFS volumes on multiple pods. 
     - Ensure high availability and performance in storage workloads. 
 
-Note: This project can be compiled with CSI Powerstore driver at this time. Other platforms are not yet supported at this time.
+Note: This project can be compiled with CSI Powerstore driver only. Other platforms are not yet supported at this time.
 
 ## Table of Contents
 
