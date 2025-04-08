@@ -317,12 +317,7 @@ func (s *CsiNfsService) BeforeServe(ctx context.Context, _ *gocsi.StoragePlugin,
 		}
 	}
 
-	if err = s.initializeNfsServer(); err != nil {
-		log.Errorf("host nfs-server failed to initialize")
-	}
-
 	// Start the NFS server listener
-	// TODO: make port configurable from environment
 	go func() {
 		err := startNfsServiceServer(s.nodeIPAddress, s.nfsClientServicePort, listen, serve)
 		if err != nil {
