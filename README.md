@@ -7,7 +7,7 @@
 
 
 ## Description
-The csm-hbnfs (Container Storage Modules - Host-Based NFS) is a component designed to export block volumes from a CSI driver via NFS. It enhances Kubernetes environments by providing NFS access to block storage volumes, allowing multiple pods to share storage efficiently.
+The csm-hbnfs (Container Storage Modules - Host-Based NFS) is a component designed to export block volumes from a CSI driver via NFS. It enhances container orchestrator environments by providing NFS access to block storage volumes, allowing multiple pods to share storage efficiently.
 
 ## Features
     Converts block storage into NFS shares. 
