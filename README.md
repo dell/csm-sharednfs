@@ -10,16 +10,16 @@
 The csm-hbnfs (Container Storage Modules - Host-Based NFS) is a component designed to export block volumes from a CSI driver via NFS. It enhances container orchestrator environments by providing NFS access to block storage volumes, allowing multiple pods to share storage efficiently.
 
 ## Features
-    Converts block storage into NFS shares. 
-    Enables multiple pods to access the same volume. 
-    Integrates seamlessly with Dell Storage solutions. 
-    Supports dynamic volume provisioning. Optimized for Kubernetes environments.
+- Converts block storage into NFS shares.
+- Enables multiple pods to access the same volume.
+- Integrates seamlessly with Dell Storage solutions.
+- Supports dynamic volume provisioning. Optimized for Kubernetes environments.
 
 ## Usage
 Once deployed, csm-hbnfs allows users to: 
-    - Create and manage NFS shares backed by block storage. 
-    - Mount NFS volumes on multiple pods. 
-    - Ensure high availability and performance in storage workloads. 
+- Create and manage NFS shares backed by block storage. 
+- Mount NFS volumes on multiple pods. 
+- Ensure high availability and performance in storage workloads. 
 
 Note: This project can be compiled with CSI Powerstore driver only. Other platforms are not yet supported at this time.
 
