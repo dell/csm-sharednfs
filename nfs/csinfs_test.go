@@ -571,7 +571,6 @@ func TestCsiNfsService_BeforeServe(t *testing.T) {
 		podCIDR         string
 		nodeName        string
 		k8sclient       *k8s.Client
-		executor        Executor
 	}
 	type args struct {
 		ctx context.Context
@@ -773,16 +772,6 @@ func TestCsiNfsService_BeforeServe(t *testing.T) {
 				k8s.NewForConfigFunc = func(_ *rest.Config) (kubernetes.Interface, error) {
 					return clientSet, nil
 				}
-
-				// mocks for initializeNfsServer
-				executor := mocks.NewMockExecutor(gomock.NewController(t))
-				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh-keyscan", "-t", "rsa,ecdsa,ed25519", "localhost").Times(1).Return([]byte{}, nil)
-
-				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server").
-					Times(1).Return([]byte("Active: active"), nil)
-				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-mountd").
-					Times(1).Return([]byte("Active: active"), nil)
-				tc.fields.executor = executor
 			},
 			wantErr:    false,
 			wantErrMsg: "",
@@ -841,23 +830,6 @@ func TestCsiNfsService_BeforeServe(t *testing.T) {
 				k8s.NewForConfigFunc = func(_ *rest.Config) (kubernetes.Interface, error) {
 					return clientSet, nil
 				}
-
-				// mocks for initializeNfsServer
-				executor := mocks.NewMockExecutor(gomock.NewController(t))
-				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh-keyscan", "-t", "rsa,ecdsa,ed25519", "localhost").Times(1).Return([]byte{}, nil)
-				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server").
-					Times(1).Return(nil, errors.New("mocked error"))
-				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-mountd").
-					Times(1).Return(nil, errors.New("mocked error"))
-				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "enable", "nfs-server").
-					Times(1).Return([]byte{}, nil)
-				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "start", "nfs-server").
-					Times(1).Return([]byte{}, nil)
-				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server").
-					Times(1).Return([]byte("Active: active"), nil)
-				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-mountd").
-					Times(1).Return([]byte("Active: active"), nil)
-				tc.fields.executor = executor
 			},
 			wantErr:    false,
 			wantErrMsg: "",
@@ -916,17 +888,6 @@ func TestCsiNfsService_BeforeServe(t *testing.T) {
 				k8s.NewForConfigFunc = func(_ *rest.Config) (kubernetes.Interface, error) {
 					return clientSet, nil
 				}
-
-				// mocks for initializeNfsServer
-				executor := mocks.NewMockExecutor(gomock.NewController(t))
-				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh-keyscan", "-t", "rsa,ecdsa,ed25519", "localhost").Times(1).Return([]byte{}, nil)
-				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-server").
-					Times(1).Return(nil, errors.New("mocked error"))
-				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "status", "nfs-mountd").
-					Times(1).Return([]byte("Active: active"), nil)
-				executor.EXPECT().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "enable", "nfs-server").
-					Times(1).Return(nil, errors.New("mocked error"))
-				tc.fields.executor = executor
 			},
 			wantErr:    false,
 			wantErrMsg: "",
@@ -947,7 +908,6 @@ func TestCsiNfsService_BeforeServe(t *testing.T) {
 				podCIDR:         tt.fields.podCIDR,
 				nodeName:        tt.fields.nodeName,
 				k8sclient:       tt.fields.k8sclient,
-				executor:        tt.fields.executor,
 			}
 			err := s.BeforeServe(tt.args.ctx, tt.args.sp, tt.args.lis)
 			if (err != nil) != tt.wantErr {
