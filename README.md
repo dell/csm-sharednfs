@@ -2,7 +2,6 @@
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/dell/csm-hbnfs?style=flat-square)](https://goreportcard.com/report/github.com/dell/csm-hbnfs)
 [![License](https://img.shields.io/github/license/dell/csm-hbnfs?style=flat-square&color=blue&label=License)](https://github.com/dell/csm-hbnfs/blob/master/LICENSE)
-[![Docker](https://img.shields.io/docker/pulls/dellemc/csm-hbnfs.svg?logo=docker&style=flat-square&label=Pulls)](https://hub.docker.com/r/dellemc/csm-hbnfs)
 [![Last Release](https://img.shields.io/github/v/release/dell/csm-hbnfs?label=Latest&style=flat-square&logo=go)](https://github.com/dell/csm-hbnfs/releases)
 
 
@@ -33,7 +32,7 @@ Note: This project can be compiled with CSI Powerstore driver only. Other platfo
 * [Support](#support)
 * [Security](https://github.com/dell/csm/blob/main/docs/SECURITY.md)
 * [Building](#building)
-* [Runtime Dependecies](#runtime-dependencies)
+* [Preequisites](#prerequisites)
 * [Driver Installation](#driver-installation)
 * [Using Driver](#using-driver)
 * [Documentation](#documentation)
