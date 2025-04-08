@@ -17,10 +17,11 @@ The csm-hbnfs (Container Storage Modules - Host-Based NFS) is a component design
 
 ## Usage
 Once deployed, csm-hbnfs allows users to: 
-    Create and manage NFS shares backed by block storage. 
-    Mount NFS volumes on multiple pods. 
-    Ensure high availability and performance in storage workloads. 
-    This project can be compiled with CSI Powerstore driver at this time. Other platforms are not yet supported at this time.
+    - Create and manage NFS shares backed by block storage. 
+    - Mount NFS volumes on multiple pods. 
+    - Ensure high availability and performance in storage workloads. 
+
+Note: This project can be compiled with CSI Powerstore driver at this time. Other platforms are not yet supported at this time.
 
 ## Table of Contents
 
@@ -41,10 +42,10 @@ Once deployed, csm-hbnfs allows users to:
 For any issues, questions or feedback, please follow our [support process](https://github.com/dell/csm/blob/main/docs/SUPPORT.md)
 
 ## Building
-This project is imported as a Go module (see golang.org Module information for explanation) from within the CSI drivers.
+This project is imported as a [Go module](https://go.dev/ref/mod) from within the CSI drivers.
 The dependencies for this project are listed in the go.mod file.
 
-To run unit tests, execute `make test`.
+To run unit tests, execute `make unit-test`.
 
 ## Prerequisites
 
