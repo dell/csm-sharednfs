@@ -53,7 +53,8 @@ func TestCreateVolume(t *testing.T) {
 		csiNfsService *CsiNfsService
 		req           *csi.CreateVolumeRequest
 		expectedRes   *csi.CreateVolumeResponse
-		expectedErr   error
+		wantErr       bool
+		expectedErr   string
 	}{
 		{
 			name: "Valid volume request",
@@ -87,7 +88,34 @@ func TestCreateVolume(t *testing.T) {
 					VolumeId: "nfs-123",
 				},
 			},
-			expectedErr: nil,
+			wantErr: false,
+		},
+		{
+			name: "create error with nil response",
+			csiNfsService: func() *CsiNfsService {
+				mockService := mocks.NewMockService(gomock.NewController(t))
+				mockService.EXPECT().CreateVolume(gomock.Any(), gomock.Any()).Times(1).Return(nil, errors.New("failed to create volume"))
+				csiNfsServce := &CsiNfsService{
+					vcsi: mockService,
+				}
+				return csiNfsServce
+			}(),
+			req: &csi.CreateVolumeRequest{
+				Name: "test-volume",
+				VolumeCapabilities: []*csi.VolumeCapability{
+					{
+						AccessType: &csi.VolumeCapability_Block{
+							Block: &csi.VolumeCapability_BlockVolume{},
+						},
+						AccessMode: &csi.VolumeCapability_AccessMode{
+							Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
+						},
+					},
+				},
+			},
+			expectedRes: nil,
+			expectedErr: "failed to create volume",
+			wantErr:     true,
 		},
 	}
 
@@ -97,7 +125,12 @@ func TestCreateVolume(t *testing.T) {
 			if !reflect.DeepEqual(resp, test.expectedRes) {
 				t.Errorf("expected response %+v, got %+v", test.expectedRes, resp)
 			}
-			assert.Equal(t, test.expectedErr, err)
+			if (err != nil) != test.wantErr {
+				t.Errorf("expected error '%s', but got err: %s", test.expectedErr, err.Error())
+			}
+			if test.wantErr {
+				assert.Contains(t, err.Error(), test.expectedErr)
+			}
 		})
 	}
 }

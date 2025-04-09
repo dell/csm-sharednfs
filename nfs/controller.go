@@ -63,11 +63,18 @@ func (cs *CsiNfsService) CreateVolume(ctx context.Context, req *csi.CreateVolume
 		},
 	}
 	subreq.VolumeCapabilities = []*csi.VolumeCapability{blockVolumeCapability}
-	log.Infof("Calling vcsi.CreateVolume parameters %+v capabilities %v", subreq.Parameters, subreq.VolumeCapabilities)
+
+	log.Debugf("HBNFS CreateVolume: calling vcsi.CreateVolume; parameters: %+v; capabilities: %v", subreq.Parameters, subreq.VolumeCapabilities)
 	resp, err := cs.vcsi.CreateVolume(ctx, subreq)
+	if err != nil {
+		log.Errorf("HBNFS CreateVolume: failed to create volume; err: %s", err.Error())
+		return resp, err
+	}
+
 	resp.Volume.VolumeId = ArrayToNFSVolumeID(resp.Volume.VolumeId)
-	log.Infof("Returning CreateVolume error %s resp %+v", err, resp)
-	return resp, err
+	log.Infof("HBNFS CreateVolume: response %+v", resp)
+
+	return resp, nil
 }
 
 func (cs *CsiNfsService) DeleteVolume(_ context.Context, _ *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
