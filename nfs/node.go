@@ -194,6 +194,27 @@ func (ns *CsiNfsService) NodeUnpublishVolume(_ context.Context, req *csi.NodeUnp
 		return &csi.NodeUnpublishVolumeResponse{}, fmt.Errorf("nfs NodeUnpublishVolume called on non NFS volume %s", req.VolumeId)
 	}
 
+	// Attempt to sync the directory, but do not fail if unable to.
+	cmd := exec.Command("sync", "-f", target)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	type syncCommandResult struct {
+		outb []byte
+		err  error
+	}
+	var syncResult syncCommandResult
+	syncDone := make(chan syncCommandResult, 1)
+	go func() {
+		outb, err := cmd.CombinedOutput()
+		syncDone <- syncCommandResult{outb, err}
+	}()
+	select {
+	case <-time.After(10 * time.Second):
+		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		log.Errorf("sync command timed out %s: %v", req.VolumeId, cmd.Args)
+	case syncResult = <-syncDone:
+		log.Infof("sync completed %s: %s", req.VolumeId, string(syncResult.outb))
+	}
+
 	// Unmount the target directory
 	log.Infof("Attempting to unmount %s for volume %s", target, req.VolumeId)
 	out, err := ns.executor.ExecuteCommand("umount", "--force", target)
