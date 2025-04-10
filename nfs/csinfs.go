@@ -262,9 +262,11 @@ func (s *CsiNfsService) BeforeServe(ctx context.Context, _ *gocsi.StoragePlugin,
 	if s.nodeName == "" {
 		s.nodeName = opSys.Getenv(EnvNodeName)
 	}
+
 	if s.nodeName == "" {
-		panic("X_CSI_NODE_NAME or NODE_NAME environment variable not set")
+		return fmt.Errorf("X_CSI_NODE_NAME or NODE_NAME environment variable not set")
 	}
+
 	log.Infof("NFS Driver Mode: %s Node Name %s", s.mode, s.nodeName)
 
 	s.nfsServerPort = os.Getenv(EnvNFSServerPort)
