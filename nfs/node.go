@@ -72,6 +72,12 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 	if service.Spec.ClusterIP == "" {
 		return resp, fmt.Errorf("NodeStageVolume %s failed, service IP empty", req.VolumeId)
 	}
+	// Check if already mounted
+	mountSource := service.Spec.ClusterIP + ":" + NfsExportDirectory + "/" + serviceName
+	if ns.isAlreadyMounted(mountSource) {
+		log.Infof("mountSource %s is already mounted- not remounting", mountSource)
+		return resp, nil
+	}
 
 	if req.StagingTargetPath == "" {
 		return resp, fmt.Errorf("NodeStageVolume %s failed, TargetPath empty", req.VolumeId)
@@ -94,7 +100,6 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 	}
 
 	// Mounting the volume
-	mountSource := service.Spec.ClusterIP + ":" + NfsExportDirectory + "/" + serviceName
 	log.Infof("csi-nfs NodeStage attempting mount %s to %s", mountSource, target)
 
 	//	mountContext, mountCancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -102,7 +107,7 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 	//	output, err = ns.executor.ExecuteCommandContext(mountContext, "mount", "-t", "nfs4", mountSource, target)
 	//	// TODO maybe put fsType nfs4 in gofsutil
 
-	cmd := exec.Command("mount", "-t", "nfs4", mountSource, target)
+	cmd := exec.Command("mount", "-t", "nfs4", "-o", "max_connect=2", mountSource, target)
 	log.Infof("%s NodeStage mount mommand args: %v", req.VolumeId, cmd.Args)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
@@ -133,6 +138,23 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 		}
 	}
 	return &csi.NodeStageVolumeResponse{}, nil
+}
+
+// isAlreadyMounted returns true if there is already a mount for that device
+func (ns *CsiNfsService) isAlreadyMounted(device string) bool {
+	out, err := ns.executor.ExecuteCommand("mount")
+	if err != nil {
+		log.Errorf("mount command failed while checking if already mounted: %s", err.Error())
+	} else {
+		lines := strings.Split(string(out), "\n")
+		for _, line := range lines {
+			if strings.Contains(line, device) {
+				log.Infof("%s isAlreayMounted", device)
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (ns *CsiNfsService) NodeUnstageVolume(_ context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
