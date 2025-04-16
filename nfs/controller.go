@@ -69,12 +69,12 @@ func (cs *CsiNfsService) CreateVolume(ctx context.Context, req *csi.CreateVolume
 	// and subsequent calls to the storage system API will fail because of a
 	// bad volume identifier.
 	if contentSource := subreq.GetVolumeContentSource(); contentSource != nil {
-		volSource := contentSource.GetVolume()
-
-		if volSource.VolumeId != "" && hasNFSPrefix(volSource.VolumeId) {
-			log.Infof("HBNFS CreateVolume: volume %s specified as volume content source", volSource.VolumeId)
-			log.Debug("HBNFS CreateVolume: removing \"nfs-\" prefix from volume ID")
-			volSource.VolumeId = ToArrayVolumeID(volSource.VolumeId)
+		if volSource := contentSource.GetVolume(); volSource != nil {
+			if volSource.VolumeId != "" && hasNFSPrefix(volSource.VolumeId) {
+				log.Infof("HBNFS CreateVolume: volume %s specified as volume content source", volSource.VolumeId)
+				log.Debug("HBNFS CreateVolume: removing \"nfs-\" prefix from volume ID")
+				volSource.VolumeId = ToArrayVolumeID(volSource.VolumeId)
+			}
 		}
 	}
 
