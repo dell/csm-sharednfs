@@ -177,6 +177,59 @@ func TestCreateVolume(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "create a volume from a snapshot",
+			csiNfsService: func() *CsiNfsService {
+				mockService := mocks.NewMockService(gomock.NewController(t))
+				mockService.EXPECT().CreateVolume(gomock.Any(), &csi.CreateVolumeRequest{
+					Name: "test-volume",
+					VolumeCapabilities: []*csi.VolumeCapability{
+						{
+							AccessType: &csi.VolumeCapability_Block{
+								Block: &csi.VolumeCapability_BlockVolume{},
+							},
+							AccessMode: &csi.VolumeCapability_AccessMode{
+								Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
+							},
+						},
+					},
+					VolumeContentSource: &csi.VolumeContentSource{
+						Type: &csi.VolumeContentSource_Snapshot{
+							Snapshot: &csi.VolumeContentSource_SnapshotSource{
+								SnapshotId: volumeHandle,
+							},
+						},
+					},
+				}).Times(1).Return(&csi.CreateVolumeResponse{
+					Volume: &csi.Volume{
+						VolumeId: clonedVolumeHandle,
+					},
+				}, nil)
+				csiNfsServce := &CsiNfsService{
+					vcsi: mockService,
+				}
+				return csiNfsServce
+			}(),
+			req: &csi.CreateVolumeRequest{
+				Name: "test-volume",
+				VolumeContentSource: &csi.VolumeContentSource{
+					Type: &csi.VolumeContentSource_Snapshot{
+						Snapshot: &csi.VolumeContentSource_SnapshotSource{
+							// when snapshots are created of a hbnfs volume,
+							// the nfs prefix is removed before passing the
+							// request to the driver so we won't have a prefix here
+							SnapshotId: volumeHandle,
+						},
+					},
+				},
+			},
+			expectedRes: &csi.CreateVolumeResponse{
+				Volume: &csi.Volume{
+					VolumeId: CsiNfsPrefixDash + clonedVolumeHandle,
+				},
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, test := range tests {
