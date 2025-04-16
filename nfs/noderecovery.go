@@ -132,7 +132,7 @@ func (s *CsiNfsService) reassignVolume(slice *discoveryv1.EndpointSlice) error {
 		unexportNfsVolumeContext := make(map[string]string)
 		unexportNfsVolumeContext["csi.requestid"] = pvName
 		unexportNfsVolumeRequest := &proto.UnexportNfsVolumeRequest{
-			VolumeId:           TrimNFSPrefix(pv.Spec.CSI.VolumeHandle),
+			VolumeId:           ToArrayVolumeID(pv.Spec.CSI.VolumeHandle),
 			UnexportNfsContext: unexportNfsVolumeContext,
 		}
 		unexportNfsVolumeRequest.UnexportNfsContext[ServiceName] = slice.Name
@@ -149,7 +149,7 @@ func (s *CsiNfsService) reassignVolume(slice *discoveryv1.EndpointSlice) error {
 	// Unpublish the volume from the node
 	start := time.Now()
 	controllerUnpublishVolumeRequest := &csi.ControllerUnpublishVolumeRequest{
-		VolumeId: TrimNFSPrefix(pv.Spec.CSI.VolumeHandle),
+		VolumeId: ToArrayVolumeID(pv.Spec.CSI.VolumeHandle),
 		NodeId:   slice.Labels["nodeID"],
 	}
 	log.Infof("reassignVolume %s calling controllerUnpublishVolume req %v",
@@ -195,7 +195,7 @@ func (s *CsiNfsService) reassignVolume(slice *discoveryv1.EndpointSlice) error {
 		},
 	}
 	controllerPublishVolumeRequest := &csi.ControllerPublishVolumeRequest{
-		VolumeId:         TrimNFSPrefix(pv.Spec.CSI.VolumeHandle),
+		VolumeId:         ToArrayVolumeID(pv.Spec.CSI.VolumeHandle),
 		NodeId:           driverNodeName,
 		VolumeCapability: volumeCapability,
 	}

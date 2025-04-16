@@ -159,7 +159,7 @@ func TestNFSToArrayVolumeID(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := TrimNFSPrefix(tt.args.id); got != tt.want {
+			if got := ToArrayVolumeID(tt.args.id); got != tt.want {
 				t.Errorf("ToArrayVolumeID() = %v, want %v", got, tt.want)
 			}
 		})
