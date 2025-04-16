@@ -74,7 +74,7 @@ func (cs *CsiNfsService) CreateVolume(ctx context.Context, req *csi.CreateVolume
 		if volSource.VolumeId != "" && hasNFSPrefix(volSource.VolumeId) {
 			log.Infof("HBNFS CreateVolume: volume %s specified as volume content source", volSource.VolumeId)
 			log.Debug("HBNFS CreateVolume: removing \"nfs-\" prefix from volume ID")
-			volSource.VolumeId = TrimNFSPrefix(volSource.VolumeId)
+			volSource.VolumeId = ToArrayVolumeID(volSource.VolumeId)
 		}
 	}
 
