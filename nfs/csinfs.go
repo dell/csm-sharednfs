@@ -133,7 +133,7 @@ var (
 	IsNFSSnapshotID = hasNFSPrefix
 )
 
-func ToArrayVolumeID(id string) string {
+func TrimNFSPrefix(id string) string {
 	return strings.TrimPrefix(id, CsiNfsPrefixDash)
 }
 

@@ -210,7 +210,7 @@ func (cs *CsiNfsService) makeNfsService(ctx context.Context, namespace, name str
 	nodeID := req.NodeId
 	// Export the volume to this node by calling back into the host driver
 	subreq := req
-	subreq.VolumeId = ToArrayVolumeID(req.VolumeId)
+	subreq.VolumeId = TrimNFSPrefix(req.VolumeId)
 	subreq.VolumeContext["csi-nfs"] = ""
 	log.Infof("Calling host driver to publish volume %s to node %s", subreq.VolumeId, subreq.NodeId)
 	// TODO: consider do we ever need a different access mode
@@ -510,7 +510,7 @@ func (cs *CsiNfsService) ControllerUnpublishVolume(ctx context.Context, req *csi
 		}
 
 		// Call the array driver to unexport the array volume. to the node
-		arrayID := ToArrayVolumeID(req.VolumeId)
+		arrayID := TrimNFSPrefix(req.VolumeId)
 		req.VolumeId = arrayID
 		subreq := req
 		return cs.vcsi.ControllerUnpublishVolume(ctx, subreq)
