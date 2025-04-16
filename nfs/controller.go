@@ -64,6 +64,20 @@ func (cs *CsiNfsService) CreateVolume(ctx context.Context, req *csi.CreateVolume
 	}
 	subreq.VolumeCapabilities = []*csi.VolumeCapability{blockVolumeCapability}
 
+	// remove the nfs- prefix when cloning a host-based nfs volume
+	// otherwise, parsing the ID in the driver may fail to remove the prefix,
+	// and subsequent calls to the storage system API will fail because of a
+	// bad volume identifier.
+	if contentSource := subreq.GetVolumeContentSource(); contentSource != nil {
+		volSource := contentSource.GetVolume()
+
+		if volSource.VolumeId != "" && hasNFSPrefix(volSource.VolumeId) {
+			log.Infof("HBNFS CreateVolume: volume %s specified as volume content source", volSource.VolumeId)
+			log.Debug("HBNFS CreateVolume: removing \"nfs-\" prefix from volume ID")
+			volSource.VolumeId = TrimNFSPrefix(volSource.VolumeId)
+		}
+	}
+
 	log.Debugf("HBNFS CreateVolume: calling vcsi.CreateVolume; parameters: %+v; capabilities: %v", subreq.Parameters, subreq.VolumeCapabilities)
 	resp, err := cs.vcsi.CreateVolume(ctx, subreq)
 	if err != nil {

@@ -48,6 +48,13 @@ import (
 )
 
 func TestCreateVolume(t *testing.T) {
+	volUUID := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	volCloneUUID := "00000000-1111-2222-3333-444444444444"
+	arrayGlobalID := "PS000000000001"
+
+	volumeHandle := volUUID + "/" + arrayGlobalID + "/scsi"
+	clonedVolumeHandle := volCloneUUID + "/" + arrayGlobalID + "/scsi"
+
 	tests := []struct {
 		name          string
 		csiNfsService *CsiNfsService
@@ -62,7 +69,7 @@ func TestCreateVolume(t *testing.T) {
 				mockService := mocks.NewMockService(gomock.NewController(t))
 				mockService.EXPECT().CreateVolume(gomock.Any(), gomock.Any()).Times(1).Return(&csi.CreateVolumeResponse{
 					Volume: &csi.Volume{
-						VolumeId: "123",
+						VolumeId: volumeHandle,
 					},
 				}, nil)
 				csiNfsServce := &CsiNfsService{
@@ -85,7 +92,7 @@ func TestCreateVolume(t *testing.T) {
 			},
 			expectedRes: &csi.CreateVolumeResponse{
 				Volume: &csi.Volume{
-					VolumeId: "nfs-123",
+					VolumeId: CsiNfsPrefixDash + volumeHandle,
 				},
 			},
 			wantErr: false,
@@ -116,6 +123,59 @@ func TestCreateVolume(t *testing.T) {
 			expectedRes: nil,
 			expectedErr: "failed to create volume",
 			wantErr:     true,
+		},
+		{
+			name: "create a clone of a volume",
+			csiNfsService: func() *CsiNfsService {
+				mockService := mocks.NewMockService(gomock.NewController(t))
+				mockService.EXPECT().CreateVolume(gomock.Any(), &csi.CreateVolumeRequest{
+					Name: "test-volume",
+					VolumeCapabilities: []*csi.VolumeCapability{
+						{
+							AccessType: &csi.VolumeCapability_Block{
+								Block: &csi.VolumeCapability_BlockVolume{},
+							},
+							AccessMode: &csi.VolumeCapability_AccessMode{
+								Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
+							},
+						},
+					},
+					VolumeContentSource: &csi.VolumeContentSource{
+						Type: &csi.VolumeContentSource_Volume{
+							Volume: &csi.VolumeContentSource_VolumeSource{
+								// the nfs prefix should be removed from the request
+								VolumeId: volumeHandle,
+							},
+						},
+					},
+				}).Times(1).Return(&csi.CreateVolumeResponse{
+					Volume: &csi.Volume{
+						VolumeId: clonedVolumeHandle,
+					},
+				}, nil)
+				csiNfsServce := &CsiNfsService{
+					vcsi: mockService,
+				}
+				return csiNfsServce
+			}(),
+			req: &csi.CreateVolumeRequest{
+				Name: "test-volume",
+				VolumeContentSource: &csi.VolumeContentSource{
+					Type: &csi.VolumeContentSource_Volume{
+						Volume: &csi.VolumeContentSource_VolumeSource{
+							// this prefix should be removed before submitting the CreateVolume
+							// request to the csi driver
+							VolumeId: CsiNfsPrefixDash + volumeHandle,
+						},
+					},
+				},
+			},
+			expectedRes: &csi.CreateVolumeResponse{
+				Volume: &csi.Volume{
+					VolumeId: CsiNfsPrefixDash + clonedVolumeHandle,
+				},
+			},
+			wantErr: false,
 		},
 	}
 
