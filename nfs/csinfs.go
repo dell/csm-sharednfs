@@ -304,7 +304,13 @@ func (s *CsiNfsService) BeforeServe(ctx context.Context, _ *gocsi.StoragePlugin,
 	log.Infof("csinode nodeIPAddress %s podCIDR %s", s.nodeIPAddress, s.podCIDR)
 
 	if s.mode != "node" {
-		return s.startNodeMonitors()
+		return nil
+	}
+
+	err = s.startNodeMonitors()
+	if err != nil {
+		log.Errorf("csinfs: failed to start node monitors. err: %s", err.Error())
+		return err
 	}
 
 	// Set up an NFS server for the node pods
