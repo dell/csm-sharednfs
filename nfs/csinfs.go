@@ -343,6 +343,10 @@ func (s *CsiNfsService) startNodeMonitors() error {
 		return fmt.Errorf("unable to retrieve nodes: %s", err)
 	}
 	for _, node := range nodes {
+		if node.Name == s.nodeName {
+			// don't ping self
+			continue
+		}
 		s.startNodeMonitor(node)
 	}
 	return nil
