@@ -19,6 +19,7 @@ package nfs
 import (
 	"context"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"syscall"
@@ -130,11 +131,28 @@ func (nfs *nfsServer) nfsUnlockPV(requestID string) {
 // The trick is in finding the volume. You actually need some array specific code to do that...
 func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsVolumeRequest) (*proto.ExportNfsVolumeResponse, error) {
 	resp := &proto.ExportNfsVolumeResponse{}
+	resp.VolumeId = req.VolumeId
 	start := time.Now()
 	defer finish(ctx, "ExportNfsVolume", req.VolumeId, start)
 	log.Infof("Received ExportNfsVolume request %s: %+v", req.VolumeId, req)
 	nfs.nfsLockPV(req.VolumeId)
 	defer nfs.nfsUnlockPV(req.VolumeId)
+
+	// Check for idempotent request
+	log.Infof("ExportNfsVolume checking for idenpotent request: %s", req.VolumeId)
+	statResult, _ := os.Stat(NfsExportDirectory + "/" + req.VolumeId)
+	target := NfsExportDirectory + "/" + req.VolumeId
+	exists, err := CheckExport(target + "/")
+	if statResult != nil && exists {
+		log.Infof("ExportNfsVolume %s already exported")
+		if resp.ExportNfsContext == nil {
+			resp.ExportNfsContext = make(map[string]string)
+		}
+		resp.ExportNfsContext["idenpotent"] = "true"
+		log.Info("ExportNfsVolume idempotent request volume %s", req.VolumeId)
+		return resp, nil
+	}
+
 	path, err := nfsService.vcsi.MountVolume(ctx, req.VolumeId, "", NfsExportDirectory, req.ExportNfsContext)
 	resp.VolumeId = req.VolumeId
 	context := req.ExportNfsContext
@@ -157,15 +175,15 @@ func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsV
 		return resp, err
 	}
 
-	log.Infof("Calling chroot chmod %s %o", path, NfsFileMode)
-	out, err := GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "chmod", NfsFileModeString, path)
-	if err != nil {
-		log.Errorf("failed chroot chmod output: %s %s", err, string(out))
-		return resp, err
-	}
+	//log.Infof("Calling chroot chmod %s %o", path, NfsFileMode)
+	//out, err := GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "chmod", NfsFileModeString, path)
+	//if err != nil {
+	//	log.Errorf("failed chroot chmod output: %s %s", err, string(out))
+	//	return resp, err
+	//}
 
 	// Read the directory entry for the path (debug)
-	out, err = GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "ls", "-ld", path)
+	out, err := GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "ls", "-ld", path)
 	if err != nil {
 		log.Errorf("failed chroot output: %s %s", err, string(out))
 		return resp, err

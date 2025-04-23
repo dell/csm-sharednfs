@@ -253,8 +253,10 @@ func (cs *CsiNfsService) makeNfsService(ctx context.Context, namespace, name str
 		// Retry the call to ExportNfsVolume if the first attempt failed
 		start := time.Now()
 		log.Infof("Retrying calling ExportNfsVolume %s", exportNfsVolumeRequest.VolumeId)
-		nodeResponse, nodeError = cs.callExportNfsVolume(ctx, nodeIPAddress, exportNfsVolumeRequest)
+		exportNfsVolumeContext, exportNfsVolumeCancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		nodeResponse, nodeError = cs.callExportNfsVolume(exportNfsVolumeContext, nodeIPAddress, exportNfsVolumeRequest)
 		log.Infof("node ExportNfsVolume took %v error %v", time.Since(start), nodeError)
+		exportNfsVolumeCancel()
 		if nodeError != nil {
 			return nil, nodeError
 		}
