@@ -512,6 +512,10 @@ func (cs *CsiNfsService) ControllerUnpublishVolume(ctx context.Context, req *csi
 		// Call the array driver to unexport the array volume. to the node
 		arrayID := ToArrayVolumeID(req.VolumeId)
 		req.VolumeId = arrayID
+
+		// Update with the correct nodeID - if it has been reassigned, we must detatch from the correct host.
+		req.NodeId = slice.Labels["nodeID"]
+
 		subreq := req
 		return cs.vcsi.ControllerUnpublishVolume(ctx, subreq)
 	}

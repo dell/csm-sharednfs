@@ -332,6 +332,12 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 				return resp, err
 			}
 
+			err = nfs.unmountAndRemove(exportDir, serviceName, parts)
+			if err != nil {
+				resp.Ready = false
+				removed--
+			}
+
 			// // Testing leaving around the old exports in place...
 			// log.Infof("Ping: service %+v", service)
 
@@ -375,6 +381,49 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 	return resp, nil
 }
 
+func (nfs *nfsServer) unmountAndRemove(exportDir string, serviceName string, options []string) error {
+
+	// Manually unmount deleted exports...
+	// err := nfs.myUnmount(exportDir)
+	out, err := GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "umount", "--force", exportDir)
+	if err != nil && !strings.Contains(err.Error(), "exit status 32") {
+		log.Errorf("[FERNANDO] unable to unmount %s, %s: %s", exportDir, err, string(out))
+
+		optionsString := strings.Join(options[1:], " ")
+		generation, err = AddExport(exportDir, optionsString)
+		if err != nil {
+			log.Errorf("AddExport %s returned error %s", exportDir, err)
+		}
+
+		err = ResyncNFSMountd(generation)
+		if err != nil {
+			log.Errorf("ResyncNFSMountd returned error %s", err)
+		}
+
+		return fmt.Errorf("unable to unmount %s", exportDir)
+	}
+
+	out, err = GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "rm", "-rf", exportDir)
+	if err != nil {
+		log.Errorf("failed rm output: %s %s", err, string(out))
+	}
+
+	devDir := NfsExportDirectory + "/" + serviceName + "-dev"
+	// err = nfs.myUnmount(devDir)
+	out, err = GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "umount", "--force", exportDir)
+	if err != nil && !strings.Contains(err.Error(), "exit status 32") {
+		log.Errorf("[FERNANDO] unable to unmount devDir %s, %s: %s", devDir, err, string(out))
+		return fmt.Errorf("unable to unmount %s", exportDir)
+	}
+
+	out, err = GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "rm", "-rf", devDir)
+	if err != nil {
+		log.Errorf("failed rm output: %s %s", err, string(out))
+	}
+
+	return nil
+}
+
 func (nfs *nfsServer) UnmountVolume(ctx context.Context, driverVolumeID, serviceName string) error {
 	for i := 0; i < maxUnmountAttempts; i++ {
 		err := nfsService.vcsi.UnmountVolume(ctx, driverVolumeID, NfsExportDirectory, map[string]string{"ServiceName": serviceName})
@@ -387,6 +436,20 @@ func (nfs *nfsServer) UnmountVolume(ctx context.Context, driverVolumeID, service
 	}
 
 	return fmt.Errorf("could not unmount volume %s", driverVolumeID)
+}
+
+func (nfs *nfsServer) myUnmount(location string) error {
+	for i := 0; i < maxUnmountAttempts; i++ {
+		err := nfs.unmounter.Unmount(location, 0)
+		if err == nil {
+			return nil
+		}
+
+		log.Errorf("[myUnmount] UnmountVolume: could not Unmount %s: %s", location, err)
+		time.Sleep(timeout)
+	}
+
+	return fmt.Errorf("[myUnmount] could not unmount volume %s", location)
 }
 
 func (nfs *nfsServer) GetServiceContent(serviceName string) (*v1.Service, error) {
