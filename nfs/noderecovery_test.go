@@ -18,7 +18,12 @@ package nfs
 
 import (
 	"context"
+	"crypto/rand"
+	"fmt"
+	"math/big"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,6 +42,10 @@ import (
 )
 
 func TestNodeRecovery(t *testing.T) {
+	port := func() string {
+		nBig, _ := rand.Int(rand.Reader, big.NewInt(9000))
+		return strconv.Itoa(int(nBig.Int64() + 1000))
+	}()
 	nodeIP := "127.0.0.1"
 	slice := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
@@ -95,7 +104,7 @@ func TestNodeRecovery(t *testing.T) {
 				clientset.DiscoveryV1().EndpointSlices("").Create(context.Background(), slice, metav1.CreateOptions{})
 
 				server := mocks.NewMockNfsServer(gomock.NewController(t))
-				createMockServer(t, "127.0.0.2", server)
+				createMockServer(t, "127.0.0.2", port, server)
 				// Give it time for the server to setup
 				time.Sleep(50 * time.Millisecond)
 
@@ -116,6 +125,11 @@ func TestNodeRecovery(t *testing.T) {
 }
 
 func TestReassignVolume(t *testing.T) {
+	port := func() string {
+		nBig, _ := rand.Int(rand.Reader, big.NewInt(9000))
+		return strconv.Itoa(int(nBig.Int64() + 1000))
+	}()
+
 	slice := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "mySlice",
@@ -139,7 +153,7 @@ func TestReassignVolume(t *testing.T) {
 	tests := []struct {
 		name      string
 		configure func(t *testing.T) *CsiNfsService
-		wantErr   bool
+		wantErr   error
 	}{
 		{
 			name: "Error: Unable to get Persisent Volume",
@@ -156,7 +170,7 @@ func TestReassignVolume(t *testing.T) {
 
 				return s
 			},
-			wantErr: true,
+			wantErr: fmt.Errorf("reassignVolume: couldn't Get volume"),
 		},
 		{
 			name: "Error: Unable to get Service",
@@ -169,6 +183,7 @@ func TestReassignVolume(t *testing.T) {
 					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
+					nfsClientServicePort: port,
 				}
 
 				clientset.CoreV1().PersistentVolumes().Create(context.Background(), &v1.PersistentVolume{
@@ -187,7 +202,7 @@ func TestReassignVolume(t *testing.T) {
 
 				return s
 			},
-			wantErr: true,
+			wantErr: fmt.Errorf("reassignVolume: could not Get Service"),
 		},
 		{
 			name: "Error: Unable to execute ControllerUnpublishVolume",
@@ -200,6 +215,7 @@ func TestReassignVolume(t *testing.T) {
 					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
+					nfsClientServicePort: port,
 				}
 
 				// Create Persistent Volume
@@ -235,7 +251,7 @@ func TestReassignVolume(t *testing.T) {
 
 				return s
 			},
-			wantErr: true,
+			wantErr: fmt.Errorf("ControllerUnpublishVolume failed error"),
 		},
 
 		{
@@ -249,6 +265,7 @@ func TestReassignVolume(t *testing.T) {
 					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
+					nfsClientServicePort: port,
 				}
 
 				// Create Persistent Volume
@@ -284,7 +301,7 @@ func TestReassignVolume(t *testing.T) {
 
 				return s
 			},
-			wantErr: true,
+			wantErr: fmt.Errorf("reassignVolume could not Get the selected node"),
 		},
 		{
 			name: "Error: Unable to execute ControllerPublishVolume",
@@ -297,6 +314,7 @@ func TestReassignVolume(t *testing.T) {
 					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
+					nfsClientServicePort: port,
 				}
 
 				// Create Persistent Volume
@@ -349,7 +367,7 @@ func TestReassignVolume(t *testing.T) {
 
 				return s
 			},
-			wantErr: true,
+			wantErr: fmt.Errorf("got error on ControllerPublishVolume"),
 		},
 		{
 			name: "Error: Unable to callExportNfsVolume",
@@ -362,6 +380,7 @@ func TestReassignVolume(t *testing.T) {
 					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
+					nfsClientServicePort: port,
 				}
 
 				// Create Persistent Volume
@@ -414,7 +433,7 @@ func TestReassignVolume(t *testing.T) {
 
 				return s
 			},
-			wantErr: true,
+			wantErr: fmt.Errorf("callExportNfsVolume failed"),
 		},
 		{
 			name: "Success: Reassign volume with proper export",
@@ -427,6 +446,7 @@ func TestReassignVolume(t *testing.T) {
 					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
+					nfsClientServicePort: port,
 				}
 
 				// Create Persistent Volume
@@ -482,13 +502,13 @@ func TestReassignVolume(t *testing.T) {
 				server := mocks.NewMockNfsServer(gomock.NewController(t))
 				server.EXPECT().ExportNfsVolume(gomock.Any(), gomock.Any()).Times(1).Return(&proto.ExportNfsVolumeResponse{VolumeId: uuid.New().String()}, nil)
 
-				createMockServer(t, "127.0.0.1", server)
+				createMockServer(t, "127.0.0.1", port, server)
 				// Give it time for the server to setup
 				time.Sleep(50 * time.Millisecond)
 
 				return s
 			},
-			wantErr: false,
+			wantErr: nil,
 		},
 	}
 
@@ -496,16 +516,22 @@ func TestReassignVolume(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := tt.configure(t)
 
-			res := s.reassignVolume(slice)
+			err := s.reassignVolume(slice)
 
-			if tt.wantErr && res {
-				t.Error("expecting error but reassign is successful")
+			if tt.wantErr != nil {
+				if !strings.Contains(err.Error(), tt.wantErr.Error()) {
+					t.Error("error response is not as expected")
+				}
 			}
 		})
 	}
 }
 
 func TestUpdateEndpointSlice(t *testing.T) {
+	port := func() string {
+		nBig, _ := rand.Int(rand.Reader, big.NewInt(9000))
+		return strconv.Itoa(int(nBig.Int64() + 1000))
+	}()
 	slice := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "mySlice",
@@ -540,6 +566,7 @@ func TestUpdateEndpointSlice(t *testing.T) {
 					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
+					nfsClientServicePort: port,
 				}
 
 				clientset.DiscoveryV1().EndpointSlices("").Create(context.Background(), slice, metav1.CreateOptions{})
@@ -558,6 +585,7 @@ func TestUpdateEndpointSlice(t *testing.T) {
 					k8sclient: &k8s.Client{
 						Clientset: clientset,
 					},
+					nfsClientServicePort: port,
 				}
 
 				return s

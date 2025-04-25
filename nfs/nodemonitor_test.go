@@ -19,6 +19,7 @@ package nfs
 import (
 	"context"
 	"crypto/rand"
+	"fmt"
 	"math/big"
 	"net"
 	"reflect"
@@ -39,6 +40,11 @@ import (
 )
 
 func TestGetExports(t *testing.T) {
+	port := func() string {
+		nBig, _ := rand.Int(rand.Reader, big.NewInt(9000))
+		return strconv.Itoa(int(nBig.Int64() + 1000))
+	}()
+
 	tests := []struct {
 		name    string
 		ip      string
@@ -61,7 +67,9 @@ func TestGetExports(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := CsiNfsService{}
+			s := CsiNfsService{
+				nfsClientServicePort: port,
+			}
 
 			server := mocks.NewMockNfsServer(gomock.NewController(t))
 			if tt.wantErr {
@@ -72,7 +80,7 @@ func TestGetExports(t *testing.T) {
 				}, nil)
 			}
 
-			createMockServer(t, tt.ip, server)
+			createMockServer(t, tt.ip, port, server)
 
 			exports, err := s.getExports(tt.ip)
 			if (err != nil) != tt.wantErr {
@@ -87,6 +95,11 @@ func TestGetExports(t *testing.T) {
 }
 
 func TestPing(t *testing.T) {
+	port := func() string {
+		nBig, _ := rand.Int(rand.Reader, big.NewInt(9000))
+		return strconv.Itoa(int(nBig.Int64() + 1000))
+	}()
+
 	tests := []struct {
 		name    string
 		ip      string
@@ -109,7 +122,7 @@ func TestPing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := CsiNfsService{}
+			s := CsiNfsService{nfsClientServicePort: port}
 
 			server := mocks.NewMockNfsServer(gomock.NewController(t))
 			if tt.wantErr {
@@ -120,7 +133,7 @@ func TestPing(t *testing.T) {
 				}, nil)
 			}
 
-			createMockServer(t, tt.ip, server)
+			createMockServer(t, tt.ip, port, server)
 
 			req := &proto.PingRequest{
 				NodeIpAddress: tt.ip,
@@ -140,6 +153,10 @@ func TestPing(t *testing.T) {
 }
 
 func TestGetNodeExportCounts(t *testing.T) {
+	port := func() string {
+		nBig, _ := rand.Int(rand.Reader, big.NewInt(9000))
+		return strconv.Itoa(int(nBig.Int64() + 1000))
+	}()
 	localHostIP := "127.0.0.1"
 
 	tests := []struct {
@@ -153,7 +170,7 @@ func TestGetNodeExportCounts(t *testing.T) {
 			createServer: func(t *testing.T) {
 				server := mocks.NewMockNfsServer(gomock.NewController(t))
 				nodeIPAddress = make(map[string]*NodeStatus)
-				createMockServer(t, localHostIP, server)
+				createMockServer(t, localHostIP, port, server)
 			},
 			want: map[string]int{},
 		},
@@ -164,7 +181,7 @@ func TestGetNodeExportCounts(t *testing.T) {
 				server.EXPECT().GetExports(gomock.Any(), gomock.Any()).Times(1).Return(&proto.GetExportsResponse{
 					Exports: []string{"127.0.0.1:/export1", "127.0.0.1:/export2"},
 				}, nil)
-				createMockServer(t, localHostIP, server)
+				createMockServer(t, localHostIP, port, server)
 				nodeIPAddress[localHostIP] = &NodeStatus{
 					nodeName: "myNode",
 					nodeIP:   localHostIP,
@@ -181,7 +198,7 @@ func TestGetNodeExportCounts(t *testing.T) {
 				server.EXPECT().GetExports(gomock.Any(), gomock.Any()).Times(1).Return(&proto.GetExportsResponse{
 					Exports: []string{"127.0.0.1:/export1", "127.0.0.1:/export2"},
 				}, nil)
-				createMockServer(t, localHostIP, server)
+				createMockServer(t, localHostIP, port, server)
 				nodeIPAddress[localHostIP] = &NodeStatus{
 					nodeName:   "myNode",
 					nodeIP:     localHostIP,
@@ -196,7 +213,7 @@ func TestGetNodeExportCounts(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := CsiNfsService{}
+			s := CsiNfsService{nfsClientServicePort: port}
 
 			tt.createServer(t)
 
@@ -213,6 +230,10 @@ func TestGetNodeExportCounts(t *testing.T) {
 }
 
 func TestPinger(t *testing.T) {
+	port := func() string {
+		nBig, _ := rand.Int(rand.Reader, big.NewInt(9000))
+		return strconv.Itoa(int(nBig.Int64() + 1000))
+	}()
 	localHostIP := "127.0.0.1"
 	tests := []struct {
 		name         string
@@ -240,7 +261,7 @@ func TestPinger(t *testing.T) {
 			createServer: func(t *testing.T) {
 				server := mocks.NewMockNfsServer(gomock.NewController(t))
 				server.EXPECT().Ping(gomock.Any(), gomock.Any()).Times(1).Return(&proto.PingResponse{Ready: true}, nil)
-				createMockServer(t, localHostIP, server)
+				createMockServer(t, localHostIP, port, server)
 			},
 			request: &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{
@@ -262,10 +283,10 @@ func TestPinger(t *testing.T) {
 			name: "Success - Recovery attempt",
 			createServer: func(t *testing.T) {
 				server := mocks.NewMockNfsServer(gomock.NewController(t))
-				server.EXPECT().Ping(gomock.Any(), gomock.Any()).Times(3).Return(&proto.PingResponse{Ready: false}, nil)
+				server.EXPECT().Ping(gomock.Any(), gomock.Any()).Times(3).Return(&proto.PingResponse{Ready: false}, fmt.Errorf("failed to ping"))
 				server.EXPECT().GetExports(gomock.Any(), gomock.Any()).Times(1).Return(nil, status.Errorf(codes.Internal, "unable to get exports"))
 
-				createMockServer(t, localHostIP, server)
+				createMockServer(t, localHostIP, port, server)
 			},
 			request: &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{
@@ -294,6 +315,7 @@ func TestPinger(t *testing.T) {
 				k8sclient: &k8s.Client{
 					Clientset: clientset,
 				},
+				nfsClientServicePort: port,
 			}
 
 			tt.createServer(t)
@@ -360,6 +382,10 @@ func TestIsControlPlaneNode(t *testing.T) {
 }
 
 func TestStartNodeMonitor(t *testing.T) {
+	port := func() string {
+		nBig, _ := rand.Int(rand.Reader, big.NewInt(9000))
+		return strconv.Itoa(int(nBig.Int64() + 1000))
+	}()
 	tests := []struct {
 		name      string
 		nfsServer *CsiNfsService
@@ -368,7 +394,7 @@ func TestStartNodeMonitor(t *testing.T) {
 		{
 			name: "Success: ControlPlaneNode",
 			nfsServer: func() *CsiNfsService {
-				s := &CsiNfsService{}
+				s := &CsiNfsService{nfsClientServicePort: port}
 				return s
 			}(),
 			node: &v1.Node{
@@ -387,7 +413,7 @@ func TestStartNodeMonitor(t *testing.T) {
 		{
 			name: "Success: NonControlPlaneNode",
 			nfsServer: func() *CsiNfsService {
-				s := &CsiNfsService{}
+				s := &CsiNfsService{nfsClientServicePort: port}
 				return s
 			}(),
 			node: &v1.Node{
@@ -467,11 +493,8 @@ func TestGetNodeStatus(t *testing.T) {
 	}
 }
 
-func createMockServer(t *testing.T, ip string, mockServer *mocks.MockNfsServer) {
-	nBig, _ := rand.Int(rand.Reader, big.NewInt(9000))
-	port := nBig.Int64() + 1000
-	setServerPort(strconv.Itoa(int(port)))
-	lis, err := net.Listen("tcp", ip+":"+getServerPort())
+func createMockServer(t *testing.T, ip string, port string, mockServer *mocks.MockNfsServer) {
+	lis, err := net.Listen("tcp", ip+":"+port)
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
 	}

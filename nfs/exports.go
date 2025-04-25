@@ -201,10 +201,12 @@ func DeleteExport(directory string) (int64, error) {
 			return generation, fmt.Errorf("failed to write to %s: %v", exportsDir, err)
 		}
 	}
+
 	err = file2.Close()
 	if err != nil {
 		return generation, fmt.Errorf("failed to close %s: %v", exportsDir, err)
 	}
+
 	log.Infof("DeleteExport %s completed", directory)
 	generation = generation + 1
 	return generation, nil
@@ -216,7 +218,7 @@ func restartNFSMountd() error {
 	exportsLock.Lock()
 	defer exportsLock.Unlock()
 	log.Infof("restarting nfs-mountd")
-	output, err := GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "container-systemctl", "restart", "nfs-mountd")
+	output, err := GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "restart", "nfs-mountd")
 	if err != nil {
 		return fmt.Errorf("failed to restart nfs-mountd: %v, output: %s", err, string(output))
 	}
@@ -242,11 +244,11 @@ func restartNFSMountd() error {
 
 // isNfsMountdActive checks if the nfs-mountd service is active
 func isNfsMountdActive() bool {
-	_, err := GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "container-systemctl", "is-active", "--quiet", "nfs-mountd")
+	_, err := GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "ssh", "localhost", "systemctl", "is-active", "--quiet", "nfs-mountd")
 	return err == nil
 }
 
-// RestartNFSMountd doesn't actually restart the server.
+// ResyncNFSMountd doesn't actually restart the server.
 // Instead it issues the exportfs -r command resync the kernel NFS with /noderoot/etc/exports.
 func ResyncNFSMountd(generation int64) error {
 	exportsLock.Lock()

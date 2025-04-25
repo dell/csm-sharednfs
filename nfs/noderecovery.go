@@ -67,15 +67,15 @@ func (s *CsiNfsService) nodeRecovery(nodeIP string) {
 	done := make(chan bool, len(endpointSlices))
 	for _, slice := range endpointSlices {
 		go func() {
-			success := s.reassignVolume(slice)
-			if !success {
-				log.Errorf("reassignVolume failed %s- retrying", slice.Name)
-				success = s.reassignVolume(slice)
-				if !success {
-					log.Errorf("reassignVolume retry failed %s- retrying", slice.Name)
+			err := s.reassignVolume(slice)
+			if err != nil {
+				log.Errorf("reassignVolume failed %s, error %s - retrying", slice.Name, err.Error())
+				err = s.reassignVolume(slice)
+				if err != nil {
+					log.Errorf("reassignVolume failed %s, error %s - retrying", slice.Name, err.Error())
 				}
 			}
-			done <- success
+			done <- (err == nil)
 		}()
 	}
 
@@ -93,7 +93,7 @@ func (s *CsiNfsService) nodeRecovery(nodeIP string) {
 // reassignVolume recovers a Volume determined from the EndpointSlice and returns true if successful.
 // in reassigning it to a new node.
 // It is intended to be called by goroutines for multiple volumes in parallel.
-func (s *CsiNfsService) reassignVolume(slice *discoveryv1.EndpointSlice) bool {
+func (s *CsiNfsService) reassignVolume(slice *discoveryv1.EndpointSlice) error {
 	ctx, cancel := context.WithTimeout(context.Background(), VolumeReassignTimeout)
 	defer cancel()
 	volumeID := slice.Annotations[DriverVolumeID]
@@ -107,14 +107,12 @@ func (s *CsiNfsService) reassignVolume(slice *discoveryv1.EndpointSlice) bool {
 
 	pv, err := s.k8sclient.GetPersistentVolume(ctx, pvName)
 	if err != nil {
-		log.Errorf("reassignVolume: couldn't Get volume %s: %s", pvName, err)
-		return false
+		return fmt.Errorf("reassignVolume: couldn't Get volume %s: %s", pvName, err)
 	}
 
 	service, err := s.k8sclient.GetService(ctx, DriverNamespace, slice.Name)
 	if err != nil {
-		log.Errorf("reassignVolume: could not Get Service %s: %s", pv.Name, err)
-		return false
+		return fmt.Errorf("reassignVolume: could not Get Service %s: %s", pv.Name, err)
 	}
 
 	// Determine the client nodes using the volume and pick a possible target node
@@ -158,17 +156,14 @@ func (s *CsiNfsService) reassignVolume(slice *discoveryv1.EndpointSlice) bool {
 		pv.Spec.CSI.VolumeHandle, controllerUnpublishVolumeRequest)
 	_, err = s.vcsi.ControllerUnpublishVolume(ctx, controllerUnpublishVolumeRequest)
 	if err != nil {
-		log.Errorf("reassignVolume %s ControllerUnpublishVolume %s failed error %s:",
-			pv.Name, controllerUnpublishVolumeRequest, err)
-		return false
+		return fmt.Errorf("reassignVolume %s ControllerUnpublishVolume failed error: %s", pv.Name, err)
 	}
 	log.Infof("reassignVolume %s ControllerUnpublishVolume complete %s", pv.Name, time.Since(start))
 
 	// Publish the volume to the new node
 	node, err := s.k8sclient.GetNode(ctx, selectedNode)
 	if err != nil {
-		log.Errorf("reassignVolume could not Get the selected node %s: %s", selectedNode, err)
-		return false
+		return fmt.Errorf("reassignVolume could not Get the selected node %s: %s", selectedNode, err)
 	}
 	nodeIPAddress := node.Status.Addresses[0].Address
 	// Export the volume from the new node's NFS server
@@ -187,8 +182,7 @@ func (s *CsiNfsService) reassignVolume(slice *discoveryv1.EndpointSlice) bool {
 		}
 	}
 	if driverNodeName == "" {
-		log.Errorf("reassignVolume couldn't identify driverNodeName: %s", csiNodeNames)
-		return false
+		return fmt.Errorf("reassignVolume couldn't identify driverNodeName: %s", csiNodeNames)
 	}
 	log.Infof("reassignVolume driver NodeName for selected node %s", driverNodeName)
 
@@ -211,8 +205,7 @@ func (s *CsiNfsService) reassignVolume(slice *discoveryv1.EndpointSlice) bool {
 	controllerPublishVolumeResponse, err := s.vcsi.ControllerPublishVolume(ctx,
 		controllerPublishVolumeRequest)
 	if err != nil {
-		log.Errorf("reassignVolume %s got error on ControllerPublishVolume: %s", pv.Name, err)
-		return false
+		return fmt.Errorf("reassignVolume %s got error on ControllerPublishVolume: %s", pv.Name, err)
 	}
 	log.Infof("contollerPublishVolumes completed %v %s", controllerPublishVolumeResponse, time.Since(start))
 
@@ -229,8 +222,7 @@ func (s *CsiNfsService) reassignVolume(slice *discoveryv1.EndpointSlice) bool {
 	var nodeError error
 	_, nodeError = s.callExportNfsVolume(ctx, nodeIPAddress, exportNfsVolumeRequest)
 	if nodeError != nil {
-		log.Errorf("callExportNfsVolume failed %s %s: %s", exportNfsVolumeRequest.VolumeId, nodeIPAddress, nodeError)
-		return false
+		return fmt.Errorf("callExportNfsVolume failed %s %s: %s", exportNfsVolumeRequest.VolumeId, nodeIPAddress, nodeError)
 	}
 	log.Infof("ExportNfsVolume %s %s completed successfully %s", slice.Name, nodeIPAddress, time.Since(start))
 
@@ -239,7 +231,7 @@ func (s *CsiNfsService) reassignVolume(slice *discoveryv1.EndpointSlice) bool {
 		log.Errorf("unable to update endpoint slice %s", slice.Name)
 	}
 
-	return true
+	return nil
 }
 
 func (s *CsiNfsService) updateEndpointSlice(ctx context.Context, slice *discoveryv1.EndpointSlice, nodeName string, node *v1.Node) error {
@@ -253,7 +245,7 @@ func (s *CsiNfsService) updateEndpointSlice(ctx context.Context, slice *discover
 			return nil
 		}
 
-		log.Errorf("Update EndpointSlice %s address %s retries %d failed: %s", slice.Name, slice.Labels["nodeIP"], retries, err)
+		log.Errorf("[updateEndpointSlice] slice %s, address %s, retries %d failed: %s", slice.Name, slice.Labels["nodeIP"], retries, err)
 		time.Sleep(endpointSliceTimeout)
 	}
 

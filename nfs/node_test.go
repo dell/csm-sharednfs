@@ -401,7 +401,7 @@ func TestNodePublishVolume(t *testing.T) {
 		executor.EXPECT().ExecuteCommand("mkdir", "-p", gomock.Any()).AnyTimes().Return([]byte{}, errors.New("mkdir error"))
 		executor.EXPECT().ExecuteCommand("umount", gomock.Any()).AnyTimes().Return([]byte{}, errors.New("mkdir error"))
 		executor.EXPECT().ExecuteCommand("chmod", "02777", gomock.Any()).AnyTimes().Return([]byte{}, errors.New("chmod error"))
-		executor.EXPECT().ExecuteCommandContext(gomock.Any(), "mount", "-t", "nfs4", gomock.Any(), gomock.Any()).AnyTimes().Return([]byte{}, errors.New("mount error"))
+		executor.EXPECT().ExecuteCommandContext(gomock.Any(), "mount", "-w", "-t", "nfs4", gomock.Any(), gomock.Any()).AnyTimes().Return([]byte{}, errors.New("mount error"))
 		service := &CsiNfsService{
 			k8sclient: &k8s.Client{
 				Clientset: clientset,
@@ -430,7 +430,7 @@ func TestNodePublishVolume(t *testing.T) {
 		executor := mocks.NewMockExecutor(gomock.NewController(t))
 		executor.EXPECT().ExecuteCommand("mkdir", "-p", gomock.Any()).Times(1).Return([]byte{}, nil)
 		executor.EXPECT().ExecuteCommand("chmod", "02777", gomock.Any()).Times(1).Return([]byte{}, nil)
-		executor.EXPECT().ExecuteCommandContext(gomock.Any(), "mount", "-t", "nfs4", gomock.Any(), gomock.Any()).Times(1).Return([]byte{}, nil)
+		executor.EXPECT().ExecuteCommandContext(gomock.Any(), "mount", "-w", "-t", "nfs4", gomock.Any(), gomock.Any()).Times(1).Return([]byte{}, nil)
 		service := &CsiNfsService{
 			k8sclient: &k8s.Client{
 				Clientset: clientset,

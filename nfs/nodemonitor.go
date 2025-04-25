@@ -18,6 +18,7 @@ package nfs
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -87,18 +88,19 @@ func (s *CsiNfsService) GetNodeStatus(address string) *NodeStatus {
 func (s *CsiNfsService) ping(pingRequest *proto.PingRequest) (*proto.PingResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), Pinger.timeout)
 	defer cancel()
-	nodeClient, err := getNfsClient(pingRequest.NodeIpAddress, getServerPort())
+	nodeClient, err := getNfsClient(pingRequest.NodeIpAddress, s.nfsClientServicePort)
 	if err != nil {
+		log.Infof("ping: unable to get nfsClient: %s", err.Error())
 		return nil, err
 	}
-	resp, err := nodeClient.Ping(ctx, pingRequest)
-	return resp, err
+
+	return nodeClient.Ping(ctx, pingRequest)
 }
 
 func (s *CsiNfsService) getExports(nodeIP string) ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), GetExportsTimeout)
 	defer cancel()
-	nodeClient, err := getNfsClient(nodeIP, getServerPort())
+	nodeClient, err := getNfsClient(nodeIP, s.nfsClientServicePort)
 	if err != nil {
 		return make([]string, 0), err
 	}
@@ -115,47 +117,60 @@ func (s *CsiNfsService) pinger(node *v1.Node) {
 		log.Errorf("pinger aborting: could not start on node %s because no IP Address", node.Name)
 		return
 	}
-	status := &NodeStatus{
-		nodeName: node.Name,
-		nodeIP:   node.Status.Addresses[0].Address,
-		online:   true,
-		status:   "",
+
+	log.Infof("pinger: starting on node %s", node.Name)
+
+	nodeStatus := NodeStatus{
+		nodeName:       node.Name,
+		nodeIP:         node.Status.Addresses[0].Address,
+		online:         false,
+		status:         "",
+		dumpingExports: false,
 	}
-	nodeIPAddress[status.nodeIP] = status
+
+	nodeIPAddress[nodeStatus.nodeIP] = &nodeStatus
 
 	// This endless loop pings the node to determine status
 	for {
-		pingRequest := &proto.PingRequest{
-			NodeIpAddress:  status.nodeIP,
-			DumpAllExports: status.dumpingExports,
+		pingRequest := proto.PingRequest{
+			NodeIpAddress:  nodeStatus.nodeIP,
+			DumpAllExports: nodeStatus.dumpingExports,
 		}
-		resp, err := s.ping(pingRequest)
+
+		resp, err := s.ping(&pingRequest)
 		if err != nil || (resp != nil && !resp.Ready) {
-			if status.online {
+			log.Errorf("pinger: error pinging node %s - error: %s", nodeStatus.nodeIP, err.Error())
+			if nodeStatus.online {
 				log.Infof("pinger: Node %s transitioned to offline", pingRequest.NodeIpAddress)
 			}
-			status.online = false
-			status.badPings++
-			status.goodPings = 0
-			if !status.inRecovery && status.badPings >= Pinger.maxBadPing {
-				log.Infof("pinger: initiating node recover actions node %s", status.nodeIP)
-				status.inRecovery = true
-				status.dumpingExports = true
 
-				go s.nodeRecovery(status.nodeIP)
+			if !strings.Contains(err.Error(), "network is unreachable") && !strings.Contains(err.Error(), "error while waiting for new LB policy update") && !strings.Contains(err.Error(), "deadline exceeded while waiting for connections to become ready") {
+				nodeStatus.online = false
+				nodeStatus.badPings++
+				nodeStatus.goodPings = 0
+				if !nodeStatus.inRecovery && nodeStatus.badPings >= Pinger.maxBadPing {
+					log.Infof("pinger: initiating node recover actions node %s", nodeStatus.nodeIP)
+					nodeStatus.inRecovery = true
+					nodeStatus.dumpingExports = true
+
+					go s.nodeRecovery(nodeStatus.nodeIP)
+				}
+			} else {
+				log.Info("pinger: We might not be online on this node")
 			}
 		} else {
-			if !status.online {
+			if !nodeStatus.online {
 				log.Infof("pinger: Node %s transitioned to online", pingRequest.NodeIpAddress)
 			}
-			status.status = resp.Status
-			status.online = true
-			status.badPings = 0
-			status.goodPings++
-			if status.goodPings >= 2 {
-				status.dumpingExports = false
+			nodeStatus.status = resp.Status
+			nodeStatus.online = true
+			nodeStatus.badPings = 0
+			nodeStatus.goodPings++
+			if nodeStatus.goodPings >= 2 {
+				nodeStatus.dumpingExports = false
 			}
-			status.inRecovery = false
+
+			nodeStatus.inRecovery = false
 		}
 		time.Sleep(getPingRate())
 	}
