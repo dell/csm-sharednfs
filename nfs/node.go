@@ -22,7 +22,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -30,8 +29,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var nodeStageTimeout = 10 * time.Second
-var nodePublishTimeout = 10 * time.Second
+var (
+	nodeStageTimeout   = 10 * time.Second
+	nodePublishTimeout = 10 * time.Second
+)
 
 func (ns *CsiNfsService) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 	ns.LockPV(req.VolumeId, req.VolumeId, false)
@@ -56,8 +57,6 @@ func (ns *CsiNfsService) NodeStageVolume(ctx context.Context, req *csi.NodeStage
 	}
 	return resp, err
 }
-
-var MountVolumeLock sync.Mutex
 
 func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 	resp := &csi.NodeStageVolumeResponse{}
@@ -123,19 +122,16 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 	}
 	var result cmdResult
 	cmdDone := make(chan cmdResult, 1)
-	MountVolumeLock.Lock()
 	go func() {
 		outb, err := cmd.CombinedOutput()
 		cmdDone <- cmdResult{outb, err}
 	}()
 	select {
-	case <-time.After(10 * time.Second):
+	case <-ctx.Done():
 		killerr := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 		log.Errorf("mount command timed out %v, pid %d, killerr %v", cmd.Args, cmd.Process.Pid, killerr)
-		MountVolumeLock.Unlock()
 		return &csi.NodeStageVolumeResponse{}, fmt.Errorf("NodeStage Mount command timeout")
 	case result = <-cmdDone:
-		MountVolumeLock.Unlock()
 		if result.err != nil {
 			if result.outb != nil {
 				log.Infof("%s NodeStage Mount command returned %s", req.VolumeId, string(result.outb))
