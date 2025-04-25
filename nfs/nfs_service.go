@@ -281,25 +281,6 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 			return resp, err
 		}
 
-		// // Remove the exports from the kernel
-		// for _, export := range exports {
-		// 	parts := strings.Split(export, " ")
-		// 	if len(parts) >= 1 {
-		// 		generation, err = DeleteExport(parts[0])
-		// 		if err != nil {
-		// 			log.Errorf("DeleteExport %s returned error %s", parts[0], err)
-		// 		}
-
-		// 		removed++
-		// 	}
-		// }
-
-		// err = ResyncNFSMountd(generation)
-		// if err != nil {
-		// 	log.Errorf("ResyncNFSMountd returned error %s", err)
-		// 	return resp, err
-		// }
-
 		log.Infof("[FERNANDo] Dumping the following exports %+v", exports)
 
 		for _, export := range exports {
@@ -337,38 +318,6 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 				resp.Ready = false
 				removed--
 			}
-
-			// // Testing leaving around the old exports in place...
-			// log.Infof("Ping: service %+v", service)
-
-			// driverVolumeID, ok := service.Annotations["driverVolumeID"]
-			// if !ok {
-			// 	log.Errorf("Ping: could not find driverVolumeID in Service %s", serviceName)
-			// }
-
-			// driverVolumeID = "nfs-" + driverVolumeID
-			// log.Infof("Ping: driverVolumeID %s", driverVolumeID)
-
-			// err = nfs.UnmountVolume(ctx, driverVolumeID, serviceName)
-			// if err != nil {
-			// 	log.Errorf("Ping: UnmountVolume returned error %s", err)
-			// 	resp.Ready = false
-
-			// 	// Ready to try and remove the exports later on.
-			// 	optionsString := strings.Join(parts[1:], " ")
-			// 	generation, err = AddExport(parts[0], optionsString)
-			// 	if err != nil {
-			// 		log.Errorf("AddExport %s returned error %s", parts[0], err)
-			// 	}
-
-			// 	err = ResyncNFSMountd(generation)
-			// 	if err != nil {
-			// 		log.Errorf("ResyncNFSMountd returned error %s", err)
-			// 	}
-
-			// 	removed--
-			// 	continue
-			// }
 		}
 
 		if !resp.Ready {
@@ -436,20 +385,6 @@ func (nfs *nfsServer) UnmountVolume(ctx context.Context, driverVolumeID, service
 	}
 
 	return fmt.Errorf("could not unmount volume %s", driverVolumeID)
-}
-
-func (nfs *nfsServer) myUnmount(location string) error {
-	for i := 0; i < maxUnmountAttempts; i++ {
-		err := nfs.unmounter.Unmount(location, 0)
-		if err == nil {
-			return nil
-		}
-
-		log.Errorf("[myUnmount] UnmountVolume: could not Unmount %s: %s", location, err)
-		time.Sleep(timeout)
-	}
-
-	return fmt.Errorf("[myUnmount] could not unmount volume %s", location)
 }
 
 func (nfs *nfsServer) GetServiceContent(serviceName string) (*v1.Service, error) {
