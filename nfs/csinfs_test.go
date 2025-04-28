@@ -510,11 +510,9 @@ func TestCsiNfsService_startNodeMonitors(t *testing.T) {
 				k8sclient: func() *k8s.Client {
 					clientSet := fake.NewClientset()
 					_, err := clientSet.CoreV1().Nodes().Create(context.Background(), &v1.Node{
-						Spec: v1.NodeSpec{
-							Taints: []v1.Taint{
-								{
-									Key: "node-role.kubernetes.io/control-plane",
-								},
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"node-role.kubernetes.io/control-plane": "",
 							},
 						},
 					}, metav1.CreateOptions{})

@@ -207,8 +207,8 @@ func (s *CsiNfsService) getNodeExportCounts(_ context.Context) map[string]int {
 }
 
 func isControlPlaneNode(node *v1.Node) bool {
-	for _, taint := range node.Spec.Taints {
-		if taint.Key == "node-role.kubernetes.io/control-plane" {
+	for key := range node.Labels {
+		if key == "node-role.kubernetes.io/control-plane" {
 			return true
 		}
 	}
