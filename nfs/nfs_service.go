@@ -291,9 +291,15 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 			serviceName := strings.Replace(exportDir, NfsExportDirectory, "", 1)
 			serviceName = strings.Replace(serviceName, "/", "", 1)
 
-			_, err := nfs.GetServiceContent(serviceName)
+			service, err := nfs.GetServiceContent(serviceName)
 			if err != nil {
 				log.Errorf("Ping: GetServiceContent returned error %s", err)
+				continue
+			}
+
+			driverVolumeID, ok := service.Annotations["driverVolumeID"]
+			if !ok {
+				log.Errorf("Ping: could not find driverVolumeID in Service %s", serviceName)
 				continue
 			}
 
@@ -312,11 +318,30 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 				return resp, err
 			}
 
-			err = nfs.unmountAndRemove(exportDir, serviceName, parts)
+			driverVolumeID = "nfs-" + driverVolumeID
+			err = nfs.UnmountVolume(ctx, driverVolumeID, serviceName)
 			if err != nil {
+				log.Errorf("Ping: UnmountVolume returned error %s", err)
 				resp.Ready = false
 				removed--
+
+				// Ready to try and remove the exports later on.
+				optionsString := strings.Join(parts[1:], " ")
+				generation, err = AddExport(parts[0], optionsString)
+				if err != nil {
+					log.Errorf("AddExport %s returned error %s", parts[0], err)
+				}
+
+				err = ResyncNFSMountd(generation)
+				if err != nil {
+					log.Errorf("ResyncNFSMountd returned error %s", err)
+				}
 			}
+			// err = nfs.unmountAndRemove(exportDir, serviceName, parts)
+			// if err != nil {
+			// 	resp.Ready = false
+			// 	removed--
+			// }
 		}
 
 		if !resp.Ready {
