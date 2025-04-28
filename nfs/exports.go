@@ -159,8 +159,6 @@ func AddExport(directory, options string) (int64, error) {
 
 // DeleteExport deletes an export entry for the given directory from /noderoot/etc/exports.
 func DeleteExport(directory string) (int64, error) {
-	log.Info("[FERNANDO] DeleteExport", directory)
-
 	exportsLock.Lock()
 	defer exportsLock.Unlock()
 	file, err := opSys.Open(pathToExports)

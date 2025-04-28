@@ -173,7 +173,7 @@ func (s *CsiNfsService) pinger(node *v1.Node) {
 
 			nodeStatus.inRecovery = false
 		}
-		time.Sleep(15 * time.Second)
+		time.Sleep(getPingRate())
 	}
 }
 

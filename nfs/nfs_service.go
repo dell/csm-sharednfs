@@ -281,8 +281,6 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 			return resp, err
 		}
 
-		log.Infof("[FERNANDo] Dumping the following exports %+v", exports)
-
 		for _, export := range exports {
 			parts := strings.Split(export, " ")
 			exportDir := parts[0]
@@ -303,6 +301,7 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 			generation, err = DeleteExport(exportDir)
 			if err != nil {
 				log.Errorf("DeleteExport %s returned error %s", parts[0], err)
+				continue
 			}
 
 			removed++
@@ -331,12 +330,10 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 }
 
 func (nfs *nfsServer) unmountAndRemove(exportDir string, serviceName string, options []string) error {
-
-	// Manually unmount deleted exports...
-	// err := nfs.myUnmount(exportDir)
+	// Manually unmount the export
 	out, err := GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "umount", "--force", exportDir)
 	if err != nil && !strings.Contains(err.Error(), "exit status 32") {
-		log.Errorf("[FERNANDO] unable to unmount %s, %s: %s", exportDir, err, string(out))
+		log.Errorf("[unmountAndRemove] unable to unmount %s, %s: %s", exportDir, err, string(out))
 
 		optionsString := strings.Join(options[1:], " ")
 		generation, err = AddExport(exportDir, optionsString)
@@ -358,10 +355,9 @@ func (nfs *nfsServer) unmountAndRemove(exportDir string, serviceName string, opt
 	}
 
 	devDir := NfsExportDirectory + "/" + serviceName + "-dev"
-	// err = nfs.myUnmount(devDir)
 	out, err = GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "umount", "--force", exportDir)
 	if err != nil && !strings.Contains(err.Error(), "exit status 32") {
-		log.Errorf("[FERNANDO] unable to unmount devDir %s, %s: %s", devDir, err, string(out))
+		log.Errorf("[unmountAndRemove] unable to unmount devDir %s, %s: %s", devDir, err, string(out))
 		return fmt.Errorf("unable to unmount %s", exportDir)
 	}
 
