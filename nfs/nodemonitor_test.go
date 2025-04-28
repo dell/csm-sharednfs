@@ -337,35 +337,31 @@ func TestIsControlPlaneNode(t *testing.T) {
 		want bool
 	}{
 		{
-			name: "node without taints",
+			name: "node without labels",
 			node: &v1.Node{
-				Spec: v1.NodeSpec{
-					Taints: []v1.Taint{},
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{},
 				},
 			},
 			want: false,
 		},
 		{
-			name: "node with taint but not control-plane taint",
+			name: "node with labels but not control-plane label",
 			node: &v1.Node{
-				Spec: v1.NodeSpec{
-					Taints: []v1.Taint{
-						{
-							Key: "node-role.kubernetes.io/other-taint",
-						},
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"node-role.kubernetes.io/other-label": "myLabel",
 					},
 				},
 			},
 			want: false,
 		},
 		{
-			name: "node with control-plane taint",
+			name: "node with control-plane label",
 			node: &v1.Node{
-				Spec: v1.NodeSpec{
-					Taints: []v1.Taint{
-						{
-							Key: "node-role.kubernetes.io/control-plane",
-						},
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"node-role.kubernetes.io/control-plane": "",
 					},
 				},
 			},
