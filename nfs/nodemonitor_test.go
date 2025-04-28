@@ -396,12 +396,8 @@ func TestStartNodeMonitor(t *testing.T) {
 			node: &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "control-plane-node",
-				},
-				Spec: v1.NodeSpec{
-					Taints: []v1.Taint{
-						{
-							Key: "node-role.kubernetes.io/control-plane",
-						},
+					Labels: map[string]string{
+						"node-role.kubernetes.io/control-plane": "",
 					},
 				},
 			},
@@ -415,12 +411,8 @@ func TestStartNodeMonitor(t *testing.T) {
 			node: &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "non-control-plane-node",
-				},
-				Spec: v1.NodeSpec{
-					Taints: []v1.Taint{
-						{
-							Key: "NonControlPlaneNodeTaint",
-						},
+					Labels: map[string]string{
+						"NonControlPlaneNodeLabel": "",
 					},
 				},
 			},
