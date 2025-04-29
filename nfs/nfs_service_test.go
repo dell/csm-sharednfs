@@ -617,8 +617,8 @@ func TestNFSPing(t *testing.T) {
 					return os.Open(name)
 				}).MaxTimes(1)
 
-				//DeleteExports
-				mockOs.EXPECT().Open(gomock.Any()).DoAndReturn(func(name string) (*os.File, error) {
+				// DeleteExports
+				mockOs.EXPECT().Open(gomock.Any()).DoAndReturn(func(_ string) (*os.File, error) {
 					return nil, os.ErrNotExist
 				}).MaxTimes(1)
 				return mockOs
