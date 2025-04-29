@@ -137,7 +137,6 @@ func (s *CsiNfsService) pinger(node *v1.Node) {
 			DumpAllExports: nodeStatus.dumpingExports,
 		}
 
-		log.Infof("pinger: sending ping to %s", nodeStatus.nodeIP)
 		resp, err := s.ping(&pingRequest)
 		if err != nil || (resp != nil && !resp.Ready) {
 			log.Errorf("pinger: error pinging node %s - error: %s", nodeStatus.nodeIP, err.Error())

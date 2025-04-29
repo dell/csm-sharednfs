@@ -337,11 +337,6 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 					log.Errorf("ResyncNFSMountd returned error %s", err)
 				}
 			}
-			// err = nfs.unmountAndRemove(exportDir, serviceName, parts)
-			// if err != nil {
-			// 	resp.Ready = false
-			// 	removed--
-			// }
 		}
 
 		if !resp.Ready {
@@ -352,46 +347,6 @@ func (nfs *nfsServer) Ping(ctx context.Context, req *proto.PingRequest) (*proto.
 		log.Infof("Ping DumpAllExports removed %d exports", removed)
 	}
 	return resp, nil
-}
-
-func (nfs *nfsServer) unmountAndRemove(exportDir string, serviceName string, options []string) error {
-	// Manually unmount the export
-	out, err := GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "umount", "--force", exportDir)
-	if err != nil && !strings.Contains(err.Error(), "exit status 32") {
-		log.Errorf("[unmountAndRemove] unable to unmount %s, %s: %s", exportDir, err, string(out))
-
-		optionsString := strings.Join(options[1:], " ")
-		generation, err = AddExport(exportDir, optionsString)
-		if err != nil {
-			log.Errorf("AddExport %s returned error %s", exportDir, err)
-		}
-
-		err = ResyncNFSMountd(generation)
-		if err != nil {
-			log.Errorf("ResyncNFSMountd returned error %s", err)
-		}
-
-		return fmt.Errorf("unable to unmount %s", exportDir)
-	}
-
-	out, err = GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "rm", "-rf", exportDir)
-	if err != nil {
-		log.Errorf("failed rm output: %s %s", err, string(out))
-	}
-
-	devDir := NfsExportDirectory + "/" + serviceName + "-dev"
-	out, err = GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "umount", "--force", exportDir)
-	if err != nil && !strings.Contains(err.Error(), "exit status 32") {
-		log.Errorf("[unmountAndRemove] unable to unmount devDir %s, %s: %s", devDir, err, string(out))
-		return fmt.Errorf("unable to unmount %s", exportDir)
-	}
-
-	out, err = GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "rm", "-rf", devDir)
-	if err != nil {
-		log.Errorf("failed rm output: %s %s", err, string(out))
-	}
-
-	return nil
 }
 
 func (nfs *nfsServer) UnmountVolume(ctx context.Context, driverVolumeID, serviceName string) error {
