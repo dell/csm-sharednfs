@@ -131,26 +131,47 @@ func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsV
 	log.Infof("ExportNfsVolume checking for idenpotent request: %s", req.VolumeId)
 	statResult, _ := os.Stat(NfsExportDirectory + "/" + req.VolumeId)
 	target := NfsExportDirectory + "/" + req.VolumeId
-	exists, err := CheckExport(target + "/")
+	exists, _ := CheckExport(target + "/")
 	if statResult != nil && exists {
-		log.Infof("ExportNfsVolume %s already exported")
+		log.Infof("ExportNfsVolume %s already exported", req.VolumeId)
 		if resp.ExportNfsContext == nil {
 			resp.ExportNfsContext = make(map[string]string)
 		}
 		resp.ExportNfsContext["idenpotent"] = "true"
-		log.Info("ExportNfsVolume idempotent request volume %s", req.VolumeId)
+		log.Infof("ExportNfsVolume idempotent request volume %s", req.VolumeId)
 		return resp, nil
 	}
 
-	path, err := nfsService.vcsi.MountVolume(ctx, req.VolumeId, "", NfsExportDirectory, req.ExportNfsContext)
+	path := ""
+mountRetry:
+	for {
+		type mountResponse struct {
+			path string
+			err  error
+		}
+		responseCh := make(chan mountResponse)
+		go func() {
+			log.Infof("ExportNfsVolume calling MountVolume for volume %s", req.VolumeId)
+			path, err := nfsService.vcsi.MountVolume(ctx, req.VolumeId, "", NfsExportDirectory, req.ExportNfsContext)
+			responseCh <- mountResponse{path, err}
+		}()
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case mount := <-responseCh:
+			if mount.err != nil {
+				return resp, mount.err
+			}
+			path = mount.path
+			break mountRetry
+		}
+	}
 	resp.VolumeId = req.VolumeId
 	context := req.ExportNfsContext
 	context["MountPath"] = path
-	if err != nil {
-		return resp, err
-	}
 	log.Infof("Calling Chown %s %d %d", path, RootUID, nfsGroupID)
-	err = opSys.Chown(path, RootUID, nfsGroupID)
+	err := opSys.Chown(path, RootUID, nfsGroupID)
 	if err != nil {
 		log.Errorf("failed chown output: %s", err)
 		return resp, err

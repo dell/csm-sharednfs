@@ -240,36 +240,56 @@ func (cs *CsiNfsService) makeNfsService(ctx context.Context, namespace, name str
 	}
 	exportNfsVolumeRequest.ExportNfsContext[ServiceName] = name
 	maps.Copy(exportNfsVolumeRequest.ExportNfsContext, subpublishResponse.PublishContext)
-	var nodeResponse *proto.ExportNfsVolumeResponse
-	var nodeError error
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		start := time.Now()
-		log.Infof("asynchronously calling ExportNfsVolume %s", exportNfsVolumeRequest.VolumeId)
-		nodeResponse, nodeError = cs.callExportNfsVolume(ctx, nodeIPAddress, exportNfsVolumeRequest)
-		log.Infof("node ExportNfsVolume took %v error %v", time.Since(start), nodeError)
-	}()
 
-	// Wait on the node processing to complete
-	log.Infof("waiting on node done %s %s...", nodeIPAddress, name)
-	wg.Wait()
+	// issue the request and wait on response or context done
+	// if we get a response with an error, issue one more request and wait on response or done
+exportRetry:
+	for {
+		type exportResponse struct {
+			response *proto.ExportNfsVolumeResponse
+			err      error
+		}
+		nodeResponse := make(chan exportResponse)
+		go func() {
+			start := time.Now()
+			log.Infof("asynchronously calling ExportNfsVolume %s", exportNfsVolumeRequest.VolumeId)
+			resp, err := cs.callExportNfsVolume(ctx, nodeIPAddress, exportNfsVolumeRequest)
+			nodeResponse <- exportResponse{resp, err}
+			log.Infof("node ExportNfsVolume took %v error %v", time.Since(start), err)
+		}()
 
-	if nodeError != nil {
-		// Give the node time to catch up, e.g. have the ISCSI path available
-		time.Sleep(10 * time.Second)
-		// Retry the call to ExportNfsVolume if the first attempt failed
-		start := time.Now()
-		log.Infof("Retrying calling ExportNfsVolume %s", exportNfsVolumeRequest.VolumeId)
-		exportNfsVolumeContext, exportNfsVolumeCancel := context.WithTimeout(context.Background(), 3*time.Minute)
-		nodeResponse, nodeError = cs.callExportNfsVolume(exportNfsVolumeContext, nodeIPAddress, exportNfsVolumeRequest)
-		log.Infof("node ExportNfsVolume took %v error %v", time.Since(start), nodeError)
-		exportNfsVolumeCancel()
-		if nodeError != nil {
-			return nil, nodeError
+		// Wait on the node processing to complete
+		log.Infof("waiting on node done %s %s...", nodeIPAddress, name)
+
+		select {
+		case <-ctx.Done():
+			return nil, status.Error(codes.Canceled, ctx.Err().Error())
+		case nodeExport := <-nodeResponse:
+			if nodeExport.err == nil {
+				log.Debugf("export response %+v", nodeExport.response)
+				close(nodeResponse)
+				break exportRetry
+			}
+			log.Infof("waiting 10s before retrying ExportNfsVolume for volume %s", exportNfsVolumeRequest.VolumeId)
+			// Give the node time to catch up, e.g. have the ISCSI path available
+			time.Sleep(10 * time.Second)
+			log.Infof("Retrying calling ExportNfsVolume %s", exportNfsVolumeRequest.VolumeId)
 		}
 	}
+	// if r := <-resp; r.err != nil {
+	// 	// Give the node time to catch up, e.g. have the ISCSI path available
+	// 	time.Sleep(10 * time.Second)
+	// 	// Retry the call to ExportNfsVolume if the first attempt failed
+	// 	start := time.Now()
+	// 	log.Infof("Retrying calling ExportNfsVolume %s", exportNfsVolumeRequest.VolumeId)
+	// 	exportNfsVolumeContext, exportNfsVolumeCancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	// 	nodeResponse, nodeError := cs.callExportNfsVolume(exportNfsVolumeContext, nodeIPAddress, exportNfsVolumeRequest)
+	// 	log.Infof("node ExportNfsVolume took %v error %v", time.Since(start), nodeError)
+	// 	exportNfsVolumeCancel()
+	// 	if nodeError != nil {
+	// 		return nil, nodeError
+	// 	}
+	// }
 	log.Infof("ExportNfsVolume %s successful", exportNfsVolumeRequest.VolumeId)
 
 	// Create the endpointslice
@@ -373,7 +393,6 @@ func (cs *CsiNfsService) makeNfsService(ctx context.Context, namespace, name str
 	//			return nil, nodeError
 	//		}
 	//	}
-	log.Infof("nodeResponse %+v", nodeResponse)
 	return service, nil
 }
 
@@ -422,6 +441,8 @@ func (cs *CsiNfsService) callExportNfsVolume(ctx context.Context, nodeIPAddress 
 		deleteNfsClient(nodeIPAddress)
 		return nil, err
 	}
+	log.Info("got NFS grpc client")
+	log.Info("exporting nfs volume")
 	exportNfsVolumeResponse, err := nodeClient.ExportNfsVolume(ctx, exportNfsVolumeRequest)
 	log.Infof("exportNfsVolume result %+v ... %v", exportNfsVolumeResponse, err)
 	return exportNfsVolumeResponse, err
