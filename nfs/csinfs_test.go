@@ -25,8 +25,8 @@ import (
 	"testing"
 	"time"
 
-	k8s "github.com/dell/csm-hbnfs/nfs/k8s"
-	"github.com/dell/csm-hbnfs/nfs/mocks"
+	k8s "github.com/dell/csm-sharednfs/nfs/k8s"
+	"github.com/dell/csm-sharednfs/nfs/mocks"
 	"github.com/dell/gocsi"
 	csictx "github.com/dell/gocsi/context"
 	"github.com/stretchr/testify/assert"
@@ -178,30 +178,30 @@ func TestVolumeIDToServiceName(t *testing.T) {
 		{
 			name: "valid ID",
 			args: args{
-				id: "csm-hbnfs-valid-id-123",
+				id: "csm-sharednfs-valid-id-123",
 			},
-			want: "csm-hbnfs-valid-id-123",
+			want: "csm-sharednfs-valid-id-123",
 		},
 		{
 			name: "sanitizes an ID with illegal chars",
 			args: args{
-				id: "csm_hbnfs_id_123",
+				id: "csm_sharednfs_id_123",
 			},
-			want: "csm-hbnfs-id-123",
+			want: "csm-sharednfs-id-123",
 		},
 		{
 			name: "sanitizes an ID that starts with an illegal char",
 			args: args{
-				id: "-_-csm_hbnfs_id_123_-_",
+				id: "-_-csm_sharednfs_id_123_-_",
 			},
-			want: "csm-hbnfs-id-123",
+			want: "csm-sharednfs-id-123",
 		},
 		{
 			name: "converts uppercase to lowercase",
 			args: args{
-				id: "CSM_HBNFS_ID_123",
+				id: "CSM_SHAREDNFS_ID_123",
 			},
-			want: "csm-hbnfs-id-123",
+			want: "csm-sharednfs-id-123",
 		},
 		{
 			name: "truncates an ID that is longer than 63 chars",

@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dell/csm-hbnfs/nfs/mocks"
+	"github.com/dell/csm-sharednfs/nfs/mocks"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )

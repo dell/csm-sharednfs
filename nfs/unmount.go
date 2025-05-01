@@ -18,7 +18,7 @@ package nfs
 
 import "syscall"
 
-//go:generate mockgen -destination=mocks/unmount.go -package=mocks github.com/dell/csm-hbnfs/nfs Unmounter
+//go:generate mockgen -destination=mocks/unmount.go -package=mocks github.com/dell/csm-sharednfs/nfs Unmounter
 type Unmounter interface {
 	Unmount(target string, flag int) error
 }

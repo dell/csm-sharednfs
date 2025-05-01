@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	k8s "github.com/dell/csm-hbnfs/nfs/k8s"
+	k8s "github.com/dell/csm-sharednfs/nfs/k8s"
 	"github.com/dell/gocsi"
 	csictx "github.com/dell/gocsi/context"
 	log "github.com/sirupsen/logrus"
@@ -35,7 +35,7 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-//go:generate mockgen -destination=mocks/service.go -package=mocks github.com/dell/csm-hbnfs/nfs Service
+//go:generate mockgen -destination=mocks/service.go -package=mocks github.com/dell/csm-sharednfs/nfs Service
 type Service interface {
 	csi.ControllerServer
 	csi.IdentityServer

@@ -21,7 +21,7 @@ import (
 	"os/exec"
 )
 
-//go:generate mockgen -destination=mocks/executor.go -package=mocks github.com/dell/csm-hbnfs/nfs Executor
+//go:generate mockgen -destination=mocks/executor.go -package=mocks github.com/dell/csm-sharednfs/nfs Executor
 type Executor interface {
 	ExecuteCommand(name string, args ...string) ([]byte, error)
 	ExecuteCommandContext(context context.Context, name string, args ...string) ([]byte, error)

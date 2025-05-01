@@ -30,7 +30,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/dell/csm-hbnfs/nfs/proto"
+	"github.com/dell/csm-sharednfs/nfs/proto"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -64,15 +64,15 @@ func (cs *CsiNfsService) CreateVolume(ctx context.Context, req *csi.CreateVolume
 	}
 	subreq.VolumeCapabilities = []*csi.VolumeCapability{blockVolumeCapability}
 
-	log.Debugf("HBNFS CreateVolume: calling vcsi.CreateVolume; parameters: %+v; capabilities: %v", subreq.Parameters, subreq.VolumeCapabilities)
+	log.Debugf("SharedNFS CreateVolume: calling vcsi.CreateVolume; parameters: %+v; capabilities: %v", subreq.Parameters, subreq.VolumeCapabilities)
 	resp, err := cs.vcsi.CreateVolume(ctx, subreq)
 	if err != nil {
-		log.Errorf("HBNFS CreateVolume: failed to create volume; err: %s", err.Error())
+		log.Errorf("SharedNFS CreateVolume: failed to create volume; err: %s", err.Error())
 		return resp, err
 	}
 
 	resp.Volume.VolumeId = ArrayToNFSVolumeID(resp.Volume.VolumeId)
-	log.Infof("HBNFS CreateVolume: response %+v", resp)
+	log.Infof("SharedNFS CreateVolume: response %+v", resp)
 
 	return resp, nil
 }
