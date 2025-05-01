@@ -513,7 +513,7 @@ func (cs *CsiNfsService) ControllerUnpublishVolume(ctx context.Context, req *csi
 		arrayID := ToArrayVolumeID(req.VolumeId)
 		req.VolumeId = arrayID
 
-		// Update with the correct nodeID - if it has been reassigned, we must detatch from the correct host.
+		// Update with the correct nodeID - if it has been reassigned, we must detach from the correct host.
 		req.NodeId = slice.Labels["nodeID"]
 
 		subreq := req
