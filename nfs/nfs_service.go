@@ -31,8 +31,8 @@ import (
 
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/dell/csm-hbnfs/nfs/proto"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"github.com/dell/csm-sharednfs/nfs/proto"
 )
 
 type (

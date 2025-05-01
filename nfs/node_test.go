@@ -24,8 +24,8 @@ import (
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	k8s "github.com/dell/csm-hbnfs/nfs/k8s"
-	"github.com/dell/csm-hbnfs/nfs/mocks"
+	k8s "github.com/dell/csm-sharednfs/nfs/k8s"
+	"github.com/dell/csm-sharednfs/nfs/mocks"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"

@@ -25,7 +25,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 
-	"github.com/dell/csm-hbnfs/nfs/proto"
+	"github.com/dell/csm-sharednfs/nfs/proto"
 )
 
 type NodeStatus struct {

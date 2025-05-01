@@ -1,6 +1,6 @@
 syntax = "proto3";
 package nfs.proto.v1;
-option go_package = "github.com/dell/csm-hbnfs/nfs/proto";
+option go_package = "github.com/dell/csm-sharednfs/nfs/proto";
 
 message ExportNfsVolumeRequest {
 	string volume_id = 1;
