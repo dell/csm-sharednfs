@@ -464,6 +464,212 @@ func TestNFSPing(t *testing.T) {
 			expectedErr:      errors.New("file not found"),
 		},
 		{
+			name: "fail to GetServiceContent",
+			request: &proto.PingRequest{
+				NodeIpAddress:  "127.0.0.1",
+				DumpAllExports: true,
+			},
+			expected: &proto.PingResponse{
+				Ready:  true,
+				Status: "",
+			},
+			nfs: func() *nfsServer {
+				return &nfsServer{}
+			}(),
+			executor: func() *mocks.MockExecutor {
+				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
+				return mockExecutor
+			}(),
+			osMock: func() *mocks.MockOSInterface {
+				mockOs := mocks.NewMockOSInterface(gomock.NewController(t))
+				// GetExports
+				mockOs.EXPECT().Open(gomock.Any()).DoAndReturn(func(name string) (*os.File, error) {
+					return os.Open(name)
+				}).MaxTimes(1)
+				return mockOs
+			}(),
+			nfsService: func() *CsiNfsService {
+				csiNFSService := &CsiNfsService{
+					k8sclient: &k8s.Client{
+						Clientset: fake.NewClientset(),
+					},
+				}
+
+				return csiNFSService
+			}(),
+			createExportFile: func() *os.File {
+				err := os.MkdirAll(exportsDir, os.ModePerm)
+				if err != nil {
+					t.Fatal(err)
+				}
+				err = os.MkdirAll("/tmp/noderoot/export 127.0.0.1(rw)", os.ModePerm)
+				if err != nil {
+					t.Fatal(err)
+				}
+				file, err := os.Create(pathToExports)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, err = file.WriteString("export 127.0.0.1(rw)\n")
+				if err != nil {
+					t.Fatal(err)
+				}
+				return file
+			},
+			deleteExportFile: func(file *os.File) {
+				_ = file.Close()
+				_ = os.RemoveAll(exportsDir)
+				_ = os.RemoveAll("/tmp/noderoot/export 127.0.0.1(rw)")
+			},
+			expectedErr: nil,
+		},
+
+		{
+			name: "fail to get driverVolumeID",
+			request: &proto.PingRequest{
+				NodeIpAddress:  "127.0.0.1",
+				DumpAllExports: true,
+			},
+			expected: &proto.PingResponse{
+				Ready:  true,
+				Status: "",
+			},
+			nfs: func() *nfsServer {
+				return &nfsServer{}
+			}(),
+			executor: func() *mocks.MockExecutor {
+				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
+				return mockExecutor
+			}(),
+			osMock: func() *mocks.MockOSInterface {
+				mockOs := mocks.NewMockOSInterface(gomock.NewController(t))
+				// GetExports
+				mockOs.EXPECT().Open(gomock.Any()).DoAndReturn(func(name string) (*os.File, error) {
+					return os.Open(name)
+				}).MaxTimes(1)
+				return mockOs
+			}(),
+			nfsService: func() *CsiNfsService {
+				csiNFSService := &CsiNfsService{
+					k8sclient: &k8s.Client{
+						Clientset: fake.NewClientset(),
+					},
+				}
+
+				// mocks for k8s clientset
+				_, err := csiNFSService.k8sclient.CreateService(context.Background(), DriverNamespace, &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{Name: ""},
+				})
+				if err != nil {
+					t.Fatalf("failed to create fake nfs service: err: %s", err.Error())
+				}
+
+				return csiNFSService
+			}(),
+			createExportFile: func() *os.File {
+				err := os.MkdirAll(exportsDir, os.ModePerm)
+				if err != nil {
+					t.Fatal(err)
+				}
+				err = os.MkdirAll("/tmp/noderoot/export 127.0.0.1(rw)", os.ModePerm)
+				if err != nil {
+					t.Fatal(err)
+				}
+				file, err := os.Create(pathToExports)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, err = file.WriteString("export 127.0.0.1(rw)\n")
+				if err != nil {
+					t.Fatal(err)
+				}
+				return file
+			},
+			deleteExportFile: func(file *os.File) {
+				_ = file.Close()
+				_ = os.RemoveAll(exportsDir)
+				_ = os.RemoveAll("/tmp/noderoot/export 127.0.0.1(rw)")
+			},
+			expectedErr: nil,
+		},
+
+		{
+			name: "fail to get DeleteExports",
+			request: &proto.PingRequest{
+				NodeIpAddress:  "127.0.0.1",
+				DumpAllExports: true,
+			},
+			expected: &proto.PingResponse{
+				Ready:  true,
+				Status: "",
+			},
+			nfs: func() *nfsServer {
+				return &nfsServer{}
+			}(),
+			executor: func() *mocks.MockExecutor {
+				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
+				return mockExecutor
+			}(),
+			osMock: func() *mocks.MockOSInterface {
+				mockOs := mocks.NewMockOSInterface(gomock.NewController(t))
+				// GetExports
+				mockOs.EXPECT().Open(gomock.Any()).DoAndReturn(func(name string) (*os.File, error) {
+					return os.Open(name)
+				}).MaxTimes(1)
+
+				// DeleteExports
+				mockOs.EXPECT().Open(gomock.Any()).DoAndReturn(func(_ string) (*os.File, error) {
+					return nil, os.ErrNotExist
+				}).MaxTimes(1)
+				return mockOs
+			}(),
+			nfsService: func() *CsiNfsService {
+				csiNFSService := &CsiNfsService{
+					k8sclient: &k8s.Client{
+						Clientset: fake.NewClientset(),
+					},
+				}
+
+				// mocks for k8s clientset
+				_, err := csiNFSService.k8sclient.CreateService(context.Background(), DriverNamespace, &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{Name: "", Annotations: map[string]string{
+						"driverVolumeID": "00000000-0000-0000-0000-000000000001/RT-M0001/scsi",
+					}},
+				})
+				if err != nil {
+					t.Fatalf("failed to create fake nfs service: err: %s", err.Error())
+				}
+
+				return csiNFSService
+			}(),
+			createExportFile: func() *os.File {
+				err := os.MkdirAll(exportsDir, os.ModePerm)
+				if err != nil {
+					t.Fatal(err)
+				}
+				err = os.MkdirAll("/tmp/noderoot/export 127.0.0.1(rw)", os.ModePerm)
+				if err != nil {
+					t.Fatal(err)
+				}
+				file, err := os.Create(pathToExports)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, err = file.WriteString("export 127.0.0.1(rw)\n")
+				if err != nil {
+					t.Fatal(err)
+				}
+				return file
+			},
+			deleteExportFile: func(file *os.File) {
+				_ = file.Close()
+				_ = os.RemoveAll(exportsDir)
+				_ = os.RemoveAll("/tmp/noderoot/export 127.0.0.1(rw)")
+			},
+			expectedErr: nil,
+		},
+
+		{
 			name: "fail to resync nfs-mountd",
 			request: &proto.PingRequest{
 				NodeIpAddress:  "127.0.0.1",
@@ -478,6 +684,7 @@ func TestNFSPing(t *testing.T) {
 			}(),
 			executor: func() *mocks.MockExecutor {
 				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
+
 				// ResyncNFSMountd() fails to resync
 				mockExecutor.EXPECT().ExecuteCommand(chroot, nodeRoot, exportfs, "-r", "-a").Return(
 					[]byte{}, errors.New("failed to resync")).Times(2)
@@ -489,13 +696,31 @@ func TestNFSPing(t *testing.T) {
 				mockOs.EXPECT().Open(gomock.Any()).DoAndReturn(func(name string) (*os.File, error) {
 					return os.Open(name)
 				}).MaxTimes(2)
+
+				// DeleteExport()
 				mockOs.EXPECT().OpenFile(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(name string, flag int, perm os.FileMode) (*os.File, error) {
 					return os.OpenFile(name, flag, perm)
 				}).Times(1)
 				return mockOs
 			}(),
 			nfsService: func() *CsiNfsService {
-				return &CsiNfsService{}
+				csiNFSService := &CsiNfsService{
+					k8sclient: &k8s.Client{
+						Clientset: fake.NewClientset(),
+					},
+				}
+
+				// mocks for k8s clientset
+				_, err := csiNFSService.k8sclient.CreateService(context.Background(), DriverNamespace, &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{Name: "", Annotations: map[string]string{
+						"driverVolumeID": "00000000-0000-0000-0000-000000000001/RT-M0001/scsi",
+					}},
+				})
+				if err != nil {
+					t.Fatalf("failed to create fake nfs service: err: %s", err.Error())
+				}
+
+				return csiNFSService
 			}(),
 			createExportFile: func() *os.File {
 				err := os.MkdirAll(exportsDir, os.ModePerm)
@@ -523,8 +748,9 @@ func TestNFSPing(t *testing.T) {
 			},
 			expectedErr: errors.New("failed to resync"),
 		},
+
 		{
-			name: "dump all exports request",
+			name: "success: dump all exports request",
 			request: &proto.PingRequest{
 				NodeIpAddress:  "127.0.0.1",
 				DumpAllExports: true,
@@ -538,23 +764,23 @@ func TestNFSPing(t *testing.T) {
 			}(),
 			executor: func() *mocks.MockExecutor {
 				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
+
 				// ResyncNFSMountd() resync
 				mockExecutor.EXPECT().ExecuteCommand(chroot, nodeRoot, exportfs, "-r", "-a").Return(
 					[]byte{}, nil).Times(1)
-
 				return mockExecutor
 			}(),
 			osMock: func() *mocks.MockOSInterface {
 				mockOs := mocks.NewMockOSInterface(gomock.NewController(t))
-				// GetExport() and DeleteExport()
+				// GetExports
 				mockOs.EXPECT().Open(gomock.Any()).DoAndReturn(func(name string) (*os.File, error) {
 					return os.Open(name)
-				}).Times(2)
+				}).MaxTimes(2)
+
 				// DeleteExport()
 				mockOs.EXPECT().OpenFile(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(name string, flag int, perm os.FileMode) (*os.File, error) {
 					return os.OpenFile(name, flag, perm)
 				}).Times(1)
-
 				return mockOs
 			}(),
 			nfsService: func() *CsiNfsService {
@@ -566,7 +792,9 @@ func TestNFSPing(t *testing.T) {
 
 				// mocks for k8s clientset
 				_, err := csiNFSService.k8sclient.CreateService(context.Background(), DriverNamespace, &v1.Service{
-					ObjectMeta: metav1.ObjectMeta{Name: ""},
+					ObjectMeta: metav1.ObjectMeta{Name: "", Annotations: map[string]string{
+						"driverVolumeID": "00000000-0000-0000-0000-000000000001/RT-M0001/scsi",
+					}},
 				})
 				if err != nil {
 					t.Fatalf("failed to create fake nfs service: err: %s", err.Error())
@@ -606,35 +834,39 @@ func TestNFSPing(t *testing.T) {
 			},
 			expectedErr: nil,
 		},
+
 		{
-			name: "fail to unmount",
+			name: "fail: unable to unmount volume",
 			request: &proto.PingRequest{
 				NodeIpAddress:  "127.0.0.1",
 				DumpAllExports: true,
+			},
+			expected: &proto.PingResponse{
+				Ready:  false,
+				Status: "",
 			},
 			nfs: func() *nfsServer {
 				return &nfsServer{}
 			}(),
 			executor: func() *mocks.MockExecutor {
 				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
-				// ResyncNFSMountd() resync
-				mockExecutor.EXPECT().ExecuteCommand(chroot, nodeRoot, exportfs, "-r", "-a").Times(1).Return(
-					[]byte{}, nil)
 
+				// ResyncNFSMountd() resync
+				mockExecutor.EXPECT().ExecuteCommand(chroot, nodeRoot, exportfs, "-r", "-a").Return(
+					[]byte{}, nil).Times(2)
 				return mockExecutor
 			}(),
 			osMock: func() *mocks.MockOSInterface {
 				mockOs := mocks.NewMockOSInterface(gomock.NewController(t))
-				// GetExport() and DeleteExport()
+				// GetExports
 				mockOs.EXPECT().Open(gomock.Any()).DoAndReturn(func(name string) (*os.File, error) {
 					return os.Open(name)
 				}).AnyTimes()
-				// DeleteExport()
+
+				// DeleteExport() + AddExport()
 				mockOs.EXPECT().OpenFile(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(name string, flag int, perm os.FileMode) (*os.File, error) {
 					return os.OpenFile(name, flag, perm)
-				}).Times(1)
-				mockOs.EXPECT().OpenFile(gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(nil, errors.New("failed to open file"))
-
+				}).Times(2)
 				return mockOs
 			}(),
 			nfsService: func() *CsiNfsService {
@@ -646,7 +878,9 @@ func TestNFSPing(t *testing.T) {
 
 				// mocks for k8s clientset
 				_, err := csiNFSService.k8sclient.CreateService(context.Background(), DriverNamespace, &v1.Service{
-					ObjectMeta: metav1.ObjectMeta{Name: ""},
+					ObjectMeta: metav1.ObjectMeta{Name: "", Annotations: map[string]string{
+						"driverVolumeID": "00000000-0000-0000-0000-000000000001/RT-M0001/scsi",
+					}},
 				})
 				if err != nil {
 					t.Fatalf("failed to create fake nfs service: err: %s", err.Error())
@@ -683,10 +917,6 @@ func TestNFSPing(t *testing.T) {
 				_ = file.Close()
 				_ = os.RemoveAll(exportsDir)
 				_ = os.RemoveAll("/tmp/noderoot/export 127.0.0.1(rw)")
-			},
-			expected: &proto.PingResponse{
-				Ready:  false,
-				Status: "",
 			},
 			expectedErr: errors.New("dumping all exports failed"),
 		},

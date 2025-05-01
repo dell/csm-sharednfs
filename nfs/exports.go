@@ -161,13 +161,14 @@ func AddExport(directory, options string) (int64, error) {
 func DeleteExport(directory string) (int64, error) {
 	exportsLock.Lock()
 	defer exportsLock.Unlock()
-	file1, err := opSys.Open(pathToExports)
+	file, err := opSys.Open(pathToExports)
 	if err != nil {
 		return generation, fmt.Errorf("failed to open %s: %v", exportsDir, err)
 	}
+	defer file.Close()
 
 	var lines []string
-	scanner := GetBufioScanner(file1)
+	scanner := GetBufioScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if !strings.HasPrefix(line, directory) {
@@ -176,35 +177,28 @@ func DeleteExport(directory string) (int64, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		err = file1.Close()
-		if err != nil {
-			log.Infof("failed to close %s: %v", exportsDir, err)
-		}
 		return generation, fmt.Errorf("error reading %s: %v", exportsDir, err)
 	}
-	err = file1.Close()
+
+	err = file.Close()
 	if err != nil {
 		return generation, fmt.Errorf("failed to close %s: %v", exportsDir, err)
 	}
 
-	file2, err := opSys.OpenFile(pathToExports, os.O_TRUNC|os.O_WRONLY, 0o644)
+	file, err = opSys.OpenFile(pathToExports, os.O_TRUNC|os.O_WRONLY, 0o644)
 	if err != nil {
 		return generation, fmt.Errorf("failed to open %s: %v", exportsDir, err)
 	}
+	defer file.Close()
 
 	for _, line := range lines {
-		if _, err := file2.WriteString(line + "\n"); err != nil {
-			err = file2.Close()
+		if _, err := file.WriteString(line + "\n"); err != nil {
+			err = file.Close()
 			if err != nil {
 				log.Infof("failed to close %s: %v", exportsDir, err)
 			}
 			return generation, fmt.Errorf("failed to write to %s: %v", exportsDir, err)
 		}
-	}
-
-	err = file2.Close()
-	if err != nil {
-		return generation, fmt.Errorf("failed to close %s: %v", exportsDir, err)
 	}
 
 	log.Infof("DeleteExport %s completed", directory)
@@ -264,7 +258,7 @@ func ResyncNFSMountd(generation int64) error {
 		output, err = GetLocalExecutor().ExecuteCommand(chroot, nodeRoot, exportfs, "-r", "-a")
 		if err == nil {
 			syncedGeneration = generation
-			log.Infof("resyncing to %s successful %d", exportsDir, generation)
+			log.Infof("resyncing to %s successful %d", exportsDir+exportsFile, generation)
 			return nil
 		}
 		log.Infof("failed resyncing nfs-mountd: %v, retries: %d, output: %s", err, retries, string(output))
