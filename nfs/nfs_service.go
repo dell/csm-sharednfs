@@ -32,7 +32,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dell/csm-hbnfs/nfs/proto"
-	k8serros "k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 type (
@@ -368,7 +368,7 @@ func (nfs *nfsServer) GetServiceContent(serviceName string) (*v1.Service, error)
 	for range maxGetSvcAttempts {
 		service, err := nfsService.k8sclient.GetService(context.Background(), DriverNamespace, serviceName)
 		if err != nil {
-			if k8serros.IsNotFound(err) {
+			if k8serrors.IsNotFound(err) {
 				log.Errorf("GetServiceContent: could not find Service %s: %s", serviceName, err)
 				return nil, err
 			}
