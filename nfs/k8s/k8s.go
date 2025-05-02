@@ -45,18 +45,18 @@ var RestInClusterConfigFunc = func() (*rest.Config, error) {
 func Connect() (*Client, error) {
 	k8sclient := new(Client)
 	var err error
-	log.Info("csi-nfs: attempting k8sapi connection using InClusterConfig")
+	log.Info("shared-nfs: attempting k8sapi connection using InClusterConfig")
 	config, err := RestInClusterConfigFunc()
 	if err != nil {
 		return nil, err
 	}
 	cs, err := NewForConfigFunc(config)
 	if err != nil {
-		log.Error("csi-nfs: unable to connect to k8sapi: " + err.Error())
+		log.Error("shared-nfs: unable to connect to k8sapi: " + err.Error())
 		return nil, err
 	}
 	k8sclient.Clientset = cs
-	log.Info("csi-nfs: connected to k8sapi")
+	log.Info("shared-nfs: connected to k8sapi")
 	return k8sclient, nil
 }
 
@@ -102,33 +102,33 @@ func (kc *Client) GetNode(ctx context.Context, nodeName string) (*v1.Node, error
 
 // GetlEndpointSlices returns the endpointslices matching match labels.
 func (kc *Client) GetEndpointSlices(ctx context.Context, namespace, labelSelector string) ([]*discoveryv1.EndpointSlice, error) {
-	log.Infof("csi-nfs: retrieving all endpointslices")
+	log.Infof("shared-nfs: retrieving all endpointslices")
 	sliceList, err := kc.Clientset.DiscoveryV1().EndpointSlices(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
 	if err != nil {
-		log.Errorf("csi-nfs: error retrieving endpointslices: %s: %s", labelSelector, err.Error())
-		return nil, fmt.Errorf("csi-nfs: error retrieving endpointslices: %s: %s", labelSelector, err.Error())
+		log.Errorf("shared-nfs: error retrieving endpointslices: %s: %s", labelSelector, err.Error())
+		return nil, fmt.Errorf("shared-nfs: error retrieving endpointslices: %s: %s", labelSelector, err.Error())
 	}
 	slices := make([]*discoveryv1.EndpointSlice, 0)
 	for _, slice := range sliceList.Items {
 		slices = append(slices, &slice)
 	}
-	log.Infof("csi-nfs: retrieved %d endpointslices", len(slices))
+	log.Infof("shared-nfs: retrieved %d endpointslices", len(slices))
 	return slices, err
 }
 
 // GetAllNodes retrieves all nodes in the Kubernetes cluster
 func (kc *Client) GetAllNodes(ctx context.Context) ([]*v1.Node, error) {
 	nodes := make([]*v1.Node, 0)
-	log.Info("csi-nfs: retrieving all nodes")
+	log.Info("shared-nfs: retrieving all nodes")
 	nodeList, err := kc.Clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
-		log.Error("csi-nfs: error retrieving nodes: " + err.Error())
+		log.Error("shared-nfs: error retrieving nodes: " + err.Error())
 		return nil, err
 	}
 	for _, node := range nodeList.Items {
 		nodes = append(nodes, &node)
 	}
-	log.Infof("csi-nfs: retrieved %d nodes", len(nodeList.Items))
+	log.Infof("shared-nfs: retrieved %d nodes", len(nodeList.Items))
 	return nodes, nil
 }
 

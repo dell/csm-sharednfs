@@ -53,7 +53,7 @@ func TestIsNFSStorageClass(t *testing.T) {
 			name: "is nfs storage class",
 			args: args{
 				parameters: map[string]string{
-					"csi-nfs": "RWX",
+					"shared-nfs": "RWX",
 				},
 			},
 			want: true,
@@ -62,13 +62,13 @@ func TestIsNFSStorageClass(t *testing.T) {
 			name: "is not nfs storage class",
 			args: args{
 				parameters: map[string]string{
-					"csi-nfs": "RWO",
+					"shared-nfs": "RWO",
 				},
 			},
 			want: false,
 		},
 		{
-			name: "parameters missing key 'csi-nfs' key",
+			name: "parameters missing key 'shared-nfs' key",
 			args: args{
 				parameters: map[string]string{
 					"missing-key": "RWX",
@@ -374,7 +374,7 @@ func TestCsiNfsService_validateGlobalVariables(t *testing.T) {
 				NodeRoot = ""
 			},
 			wantErr:    true,
-			wantErrMsg: "csi-nfs NodeRoot variable must be set; used for chroot into node; validated with /noderoot/etc/exports",
+			wantErrMsg: "shared-nfs NodeRoot variable must be set; used for chroot into node; validated with /noderoot/etc/exports",
 		},
 		{
 			name: "mode is controller and driver namespace is unset",
