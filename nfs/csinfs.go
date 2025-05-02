@@ -121,7 +121,7 @@ func (o *OSImpl) Chmod(fileName string, mode os.FileMode) error {
 }
 
 func IsNFSStorageClass(parameters map[string]string) bool {
-	return parameters["csi-nfs"] == "RWX"
+	return parameters["shared-nfs"] == "RWX"
 }
 
 func hasNFSPrefix(id string) bool {
@@ -223,7 +223,7 @@ func (s *CsiNfsService) validateGlobalVariables() error {
 	}
 	if s.mode == "node" {
 		if NodeRoot == "" {
-			return fmt.Errorf("csi-nfs NodeRoot variable must be set; used for chroot into node; validated with /noderoot/etc/exports")
+			return fmt.Errorf("shared-nfs NodeRoot variable must be set; used for chroot into node; validated with /noderoot/etc/exports")
 		}
 		_, err := opSys.Stat(NodeRoot + "/etc/exports")
 		if err != nil {

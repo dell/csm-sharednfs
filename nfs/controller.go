@@ -37,7 +37,7 @@ import (
 )
 
 const (
-	CsiNfsParameter  = "csi-nfs"
+	CsiNfsParameter  = "shared-nfs"
 	CsiNfsPrefix     = "nfs"
 	CsiNfsPrefixDash = "nfs-"
 	ServiceName      = "ServiceName"
@@ -211,7 +211,7 @@ func (cs *CsiNfsService) makeNfsService(ctx context.Context, namespace, name str
 	// Export the volume to this node by calling back into the host driver
 	subreq := req
 	subreq.VolumeId = ToArrayVolumeID(req.VolumeId)
-	subreq.VolumeContext["csi-nfs"] = ""
+	subreq.VolumeContext["shared-nfs"] = ""
 	log.Infof("Calling host driver to publish volume %s to node %s", subreq.VolumeId, subreq.NodeId)
 	// TODO: consider do we ever need a different access mode
 	blockVolumeCapability := &csi.VolumeCapability{
