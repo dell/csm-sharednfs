@@ -13,7 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	proto "github.com/dell/csm-hbnfs/nfs/proto"
+	proto "github.com/dell/csm-sharednfs/nfs/proto"
 	gomock "go.uber.org/mock/gomock"
 	grpc "google.golang.org/grpc"
 )

@@ -1,4 +1,4 @@
-module github.com/dell/csm-hbnfs
+module github.com/dell/csm-sharednfs
 
 go 1.24
 

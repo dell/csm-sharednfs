@@ -31,9 +31,9 @@ import (
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	k8s "github.com/dell/csm-hbnfs/nfs/k8s"
-	"github.com/dell/csm-hbnfs/nfs/mocks"
-	"github.com/dell/csm-hbnfs/nfs/proto"
+	k8s "github.com/dell/csm-sharednfs/nfs/k8s"
+	"github.com/dell/csm-sharednfs/nfs/mocks"
+	"github.com/dell/csm-sharednfs/nfs/proto"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc/codes"
@@ -288,7 +288,7 @@ func TestControllerPublishVolume(t *testing.T) {
 				mockService := mocks.NewMockService(gomock.NewController(t))
 				mockService.EXPECT().ControllerPublishVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&csi.ControllerPublishVolumeResponse{
 					PublishContext: map[string]string{
-						"csi-nfs": "test-node",
+						"shared-nfs": "test-node",
 					},
 				}, nil)
 				fakeK8sClient := fake.NewSimpleClientset()
@@ -442,7 +442,7 @@ func TestControllerPublishVolume(t *testing.T) {
 				mockService := mocks.NewMockService(gomock.NewController(t))
 				mockService.EXPECT().ControllerPublishVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&csi.ControllerPublishVolumeResponse{
 					PublishContext: map[string]string{
-						"csi-nfs": "test-node",
+						"shared-nfs": "test-node",
 					},
 				}, nil)
 				fakeK8sClient := fake.NewSimpleClientset()
@@ -522,7 +522,7 @@ func TestControllerPublishVolume(t *testing.T) {
 				mockService := mocks.NewMockService(gomock.NewController(t))
 				mockService.EXPECT().ControllerPublishVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&csi.ControllerPublishVolumeResponse{
 					PublishContext: map[string]string{
-						"csi-nfs": "test-node",
+						"shared-nfs": "test-node",
 					},
 				}, nil)
 				fakeK8sClient := fake.NewSimpleClientset()
@@ -582,7 +582,7 @@ func TestControllerPublishVolume(t *testing.T) {
 				mockService := mocks.NewMockService(gomock.NewController(t))
 				mockService.EXPECT().ControllerPublishVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&csi.ControllerPublishVolumeResponse{
 					PublishContext: map[string]string{
-						"csi-nfs": "test-node",
+						"shared-nfs": "test-node",
 					},
 				}, nil)
 				fakeK8sClient := fake.NewSimpleClientset()
@@ -676,7 +676,7 @@ func TestControllerPublishVolume(t *testing.T) {
 				mockService := mocks.NewMockService(gomock.NewController(t))
 				mockService.EXPECT().ControllerPublishVolume(gomock.Any(), gomock.Any()).AnyTimes().Return(&csi.ControllerPublishVolumeResponse{
 					PublishContext: map[string]string{
-						"csi-nfs": "test-node",
+						"shared-nfs": "test-node",
 					},
 				}, nil)
 				fakeK8sClient := fake.NewSimpleClientset()

@@ -30,7 +30,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 
-	"github.com/dell/csm-hbnfs/nfs/proto"
+	"github.com/dell/csm-sharednfs/nfs/proto"
 )
 
 var (

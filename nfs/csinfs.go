@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	k8s "github.com/dell/csm-hbnfs/nfs/k8s"
+	k8s "github.com/dell/csm-sharednfs/nfs/k8s"
 	"github.com/dell/gocsi"
 	csictx "github.com/dell/gocsi/context"
 	log "github.com/sirupsen/logrus"
@@ -35,7 +35,7 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-//go:generate mockgen -destination=mocks/service.go -package=mocks github.com/dell/csm-hbnfs/nfs Service
+//go:generate mockgen -destination=mocks/service.go -package=mocks github.com/dell/csm-sharednfs/nfs Service
 type Service interface {
 	csi.ControllerServer
 	csi.IdentityServer
@@ -121,7 +121,7 @@ func (o *OSImpl) Chmod(fileName string, mode os.FileMode) error {
 }
 
 func IsNFSStorageClass(parameters map[string]string) bool {
-	return parameters["csi-nfs"] == "RWX"
+	return parameters["shared-nfs"] == "RWX"
 }
 
 func hasNFSPrefix(id string) bool {
@@ -223,7 +223,7 @@ func (s *CsiNfsService) validateGlobalVariables() error {
 	}
 	if s.mode == "node" {
 		if NodeRoot == "" {
-			return fmt.Errorf("csi-nfs NodeRoot variable must be set; used for chroot into node; validated with /noderoot/etc/exports")
+			return fmt.Errorf("shared-nfs NodeRoot variable must be set; used for chroot into node; validated with /noderoot/etc/exports")
 		}
 		_, err := opSys.Stat(NodeRoot + "/etc/exports")
 		if err != nil {

@@ -1,12 +1,12 @@
-# CSM Host Based NFS for Dell CSI drivers
+# CSM SharedNFS for Dell CSI drivers
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/dell/csm-hbnfs?style=flat-square)](https://goreportcard.com/report/github.com/dell/csm-hbnfs)
-[![License](https://img.shields.io/github/license/dell/csm-hbnfs?style=flat-square&color=blue&label=License)](https://github.com/dell/csm-hbnfs/blob/master/LICENSE)
-[![Last Release](https://img.shields.io/github/v/release/dell/csm-hbnfs?label=Latest&style=flat-square&logo=go)](https://github.com/dell/csm-hbnfs/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/dell/csm-sharednfs?style=flat-square)](https://goreportcard.com/report/github.com/dell/csm-sharednfs)
+[![License](https://img.shields.io/github/license/dell/csm-sharednfs?style=flat-square&color=blue&label=License)](https://github.com/dell/csm-sharednfs/blob/master/LICENSE)
+[![Last Release](https://img.shields.io/github/v/release/dell/csm-sharednfs?label=Latest&style=flat-square&logo=go)](https://github.com/dell/csm-sharednfs/releases)
 
 
 ## Description
-The csm-hbnfs (Container Storage Modules - Host-Based NFS) is a component designed to export block volumes from a CSI driver via NFS. It enhances container orchestrator environments by providing NFS access to block storage volumes, allowing multiple pods to share storage efficiently.
+The csm-sharednfs (Container Storage Modules - SharedNFS) is a component designed to export block volumes from a CSI driver via NFS. It enhances container orchestrator environments by providing NFS access to block storage volumes, allowing multiple pods to share storage efficiently.
 
 ## Features
 - Converts block storage into NFS shares.
@@ -15,7 +15,7 @@ The csm-hbnfs (Container Storage Modules - Host-Based NFS) is a component design
 - Supports dynamic volume provisioning. Optimized for Kubernetes environments.
 
 ## Usage
-Once deployed, csm-hbnfs allows users to: 
+Once deployed, csm-sharednfs allows users to:
 - Create and manage NFS shares backed by block storage. 
 - Mount NFS volumes on multiple pods. 
 - Ensure high availability and performance in storage workloads. 

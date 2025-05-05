@@ -19,7 +19,6 @@ package nfs
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -69,7 +68,7 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 	// Get lock for concurrency
 	serviceName := VolumeIDToServiceName(req.VolumeId)
 
-	log.Infof("csi-nfs NodeStageVolume called volumeID %s StagingPath", req.VolumeId, req.StagingTargetPath)
+	log.Infof("shared-nfs NodeStageVolume called volumeID %s StagingPath", req.VolumeId, req.StagingTargetPath)
 
 	// First, locate the service
 	// TODO are we using the vxflexos namespace?
@@ -99,7 +98,7 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 		log.Errorf("StagingTarget path %s not created: %s ... proceeding anyway: %s \n", target, err, string(output))
 		// Unmount the target directory
 		out, err := ns.executor.ExecuteCommand("umount", target)
-		log.Infof("csi-nfs NodeStage %s umount target error: %v:\n%s", target, err, string(out))
+		log.Infof("shared-nfs NodeStageVolume %s umount target error: %v:\n%s", target, err, string(out))
 	}
 
 	log.Info("Changing permissions of target path")
@@ -109,7 +108,7 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 	}
 
 	// Mounting the volume
-	log.Infof("csi-nfs NodeStage attempting mount %s to %s", mountSource, target)
+	log.Infof("shared-nfs NodeStage attempting mount %s to %s", mountSource, target)
 
 	//	mountContext, mountCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	//	defer mountCancel()
@@ -207,10 +206,10 @@ func (ns *CsiNfsService) NodeUnstageVolume(_ context.Context, req *csi.NodeUnsta
 	log.Infof("Attempting to unmount %s for volume %s", target, req.VolumeId)
 	out, err := ns.executor.ExecuteCommand("umount", "--force", target)
 	if err != nil && !strings.Contains(err.Error(), "exit status 32") {
-		log.Infof("csi-nfs NodeUnstage umount target %s: error: %s\n%s", target, err, string(out))
+		log.Infof("shared-nfs NodeUnstage umount target %s: error: %s\n%s", target, err, string(out))
 		return &csi.NodeUnstageVolumeResponse{}, err
 	}
-	log.Infof("csi-nfs NodeUnstage umount target no error: %s in %s:\n%s", target, time.Since(start), string(out))
+	log.Infof("shared-nfs NodeUnstage umount target no error: %s in %s:\n%s", target, time.Since(start), string(out))
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
 
@@ -238,7 +237,7 @@ func (ns *CsiNfsService) NodePublishVolume(ctx context.Context, req *csi.NodePub
 		}
 		return resp, err
 	}
-	log.Infof("csi-nfs NodePublish umount target no error: %s in %s:\n%s", req.TargetPath, time.Since(start), string(out))
+	log.Infof("shared-nfs NodePublish umount target no error: %s in %s:\n%s", req.TargetPath, time.Since(start), string(out))
 	return resp, nil
 }
 
@@ -277,11 +276,10 @@ func (ns *CsiNfsService) NodeUnpublishVolume(_ context.Context, req *csi.NodeUnp
 	log.Infof("Attempting to unmount %s for volume %s", target, req.VolumeId)
 	out, err := ns.executor.ExecuteCommand("umount", "--force", target)
 	if err != nil && !strings.Contains(err.Error(), "exit status 32") {
-		log.Infof("csi-nfs NodeUnpublish umount target %s: error: %s\n%s", target, err, string(out))
+		log.Infof("shared-nfs NodeUnpublish umount target %s: error: %s\n%s", target, err, string(out))
 		return &csi.NodeUnpublishVolumeResponse{}, err
 	}
-	os.Remove(target)
-	log.Infof("csi-nfs NodeUnpublish umount target no error: %s in %s:\n%s", target, time.Since(start), string(out))
+	log.Infof("shared-nfs NodeUnpublish umount target no error: %s in %s:\n%s", target, time.Since(start), string(out))
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 

@@ -30,14 +30,14 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/dell/csm-hbnfs/nfs/proto"
+	"github.com/dell/csm-sharednfs/nfs/proto"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
-	CsiNfsParameter  = "csi-nfs"
+	CsiNfsParameter  = "shared-nfs"
 	CsiNfsPrefix     = "nfs"
 	CsiNfsPrefixDash = "nfs-"
 	ServiceName      = "ServiceName"
@@ -64,15 +64,15 @@ func (cs *CsiNfsService) CreateVolume(ctx context.Context, req *csi.CreateVolume
 	}
 	subreq.VolumeCapabilities = []*csi.VolumeCapability{blockVolumeCapability}
 
-	log.Debugf("HBNFS CreateVolume: calling vcsi.CreateVolume; parameters: %+v; capabilities: %v", subreq.Parameters, subreq.VolumeCapabilities)
+	log.Debugf("SharedNFS CreateVolume: calling vcsi.CreateVolume; parameters: %+v; capabilities: %v", subreq.Parameters, subreq.VolumeCapabilities)
 	resp, err := cs.vcsi.CreateVolume(ctx, subreq)
 	if err != nil {
-		log.Errorf("HBNFS CreateVolume: failed to create volume; err: %s", err.Error())
+		log.Errorf("SharedNFS CreateVolume: failed to create volume; err: %s", err.Error())
 		return resp, err
 	}
 
 	resp.Volume.VolumeId = ArrayToNFSVolumeID(resp.Volume.VolumeId)
-	log.Infof("HBNFS CreateVolume: response %+v", resp)
+	log.Infof("SharedNFS CreateVolume: response %+v", resp)
 
 	return resp, nil
 }
@@ -211,7 +211,7 @@ func (cs *CsiNfsService) makeNfsService(ctx context.Context, namespace, name str
 	// Export the volume to this node by calling back into the host driver
 	subreq := req
 	subreq.VolumeId = ToArrayVolumeID(req.VolumeId)
-	subreq.VolumeContext["csi-nfs"] = ""
+	subreq.VolumeContext["shared-nfs"] = ""
 	log.Infof("Calling host driver to publish volume %s to node %s", subreq.VolumeId, subreq.NodeId)
 	// TODO: consider do we ever need a different access mode
 	blockVolumeCapability := &csi.VolumeCapability{
@@ -554,6 +554,10 @@ func (cs *CsiNfsService) ControllerUnpublishVolume(ctx context.Context, req *csi
 		// Call the array driver to unexport the array volume. to the node
 		arrayID := ToArrayVolumeID(req.VolumeId)
 		req.VolumeId = arrayID
+
+		// Update with the correct nodeID - if it has been reassigned, we must detach from the correct host.
+		req.NodeId = slice.Labels["nodeID"]
+
 		subreq := req
 		return cs.vcsi.ControllerUnpublishVolume(ctx, subreq)
 	}
