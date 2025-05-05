@@ -22,10 +22,12 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -57,6 +59,8 @@ func (ns *CsiNfsService) NodeStageVolume(ctx context.Context, req *csi.NodeStage
 	}
 	return resp, err
 }
+
+var mountMutex = sync.Mutex{}
 
 func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 	resp := &csi.NodeStageVolumeResponse{}
@@ -122,27 +126,54 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 	}
 	var result cmdResult
 	cmdDone := make(chan cmdResult, 1)
-	go func() {
-		outb, err := cmd.CombinedOutput()
-		cmdDone <- cmdResult{outb, err}
-	}()
-	select {
-	case <-ctx.Done():
-		killerr := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		log.Errorf("mount command timed out %v, pid %d, killerr %v", cmd.Args, cmd.Process.Pid, killerr)
-		return &csi.NodeStageVolumeResponse{}, fmt.Errorf("NodeStage Mount command timeout")
-	case result = <-cmdDone:
-		if result.err != nil {
-			if result.outb != nil {
-				log.Infof("%s NodeStage Mount command returned %s", req.VolumeId, string(result.outb))
+
+	// track how long it takes to get a lock
+	start := time.Now()
+	uuid := uuid.New()
+	log.Infof("trying to acquire lock for %s", uuid)
+
+	// get a lock on mount cmd
+	mountMutex.Lock()
+	defer mountMutex.Unlock()
+	log.Infof("got lock for %s after %s", uuid, time.Since(start))
+
+	dl, ok := ctx.Deadline()
+	var to time.Duration
+	if ok {
+		to = time.Until(dl)
+	}
+
+	for i := 1; ; i++ {
+		mountTimeout := time.Duration(float64(to) * 0.1 * float64(i))
+		mountCtx, mntCancel := context.WithTimeout(ctx, mountTimeout)
+
+		go func() {
+			defer mntCancel()
+			log.Infof("ExportNfsVolume calling MountVolume for volume %s, with timeout: %+v", req.VolumeId, mountTimeout)
+			outb, err := cmd.CombinedOutput()
+			cmdDone <- cmdResult{outb, err}
+		}()
+
+		select {
+		case <-mountCtx.Done():
+			log.Warnf("pod mount local timed out for uuid %s. retrying...", uuid)
+		case <-ctx.Done():
+			killerr := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+			log.Errorf("mount command timed out %v, pid %d, killerr %v", cmd.Args, cmd.Process.Pid, killerr)
+			return &csi.NodeStageVolumeResponse{}, fmt.Errorf("NodeStage Mount command timeout")
+		case result = <-cmdDone:
+			if result.err != nil {
+				if result.outb != nil {
+					log.Infof("%s NodeStage Mount command returned %s", req.VolumeId, string(result.outb))
+				}
+				log.Infof("%s NodeStage Mount failed: %v : %s", req.VolumeId, cmd.Args, result.err.Error())
+				return &csi.NodeStageVolumeResponse{}, result.err
+			} else {
+				log.Infof("NodeStage Mount ALL GOOD result: %v : %s", cmd.Args, string(result.outb))
+				return &csi.NodeStageVolumeResponse{}, nil
 			}
-			log.Infof("%s NodeStage Mount failed: %v : %s", req.VolumeId, cmd.Args, result.err.Error())
-			return &csi.NodeStageVolumeResponse{}, result.err
-		} else {
-			log.Infof("NodeStage Mount ALL GOOD result: %v : %s", cmd.Args, string(result.outb))
 		}
 	}
-	return &csi.NodeStageVolumeResponse{}, nil
 }
 
 // isAlreadyMounted returns true if there is already a mount for that device

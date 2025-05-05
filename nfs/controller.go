@@ -263,6 +263,7 @@ exportRetry:
 
 		select {
 		case <-ctx.Done():
+			log.Errorf("callExportNfsVolume timed out for volume %s", req.VolumeId)
 			return nil, status.Error(codes.Canceled, ctx.Err().Error())
 		case nodeExport := <-nodeResponse:
 			if nodeExport.err == nil {

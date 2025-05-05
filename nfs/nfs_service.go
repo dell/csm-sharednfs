@@ -158,6 +158,7 @@ mountRetry:
 
 		select {
 		case <-ctx.Done():
+			log.Errorf("MountVolume request timed out for volume %s", req.VolumeId)
 			return nil, ctx.Err()
 		case mount := <-responseCh:
 			if mount.err != nil {
