@@ -264,7 +264,7 @@ exportRetry:
 		select {
 		case <-ctx.Done():
 			log.Errorf("callExportNfsVolume timed out for volume %s", req.VolumeId)
-			return nil, status.Error(codes.Canceled, ctx.Err().Error())
+			return nil, status.Error(codes.DeadlineExceeded, ctx.Err().Error())
 		case nodeExport := <-nodeResponse:
 			if nodeExport.err == nil {
 				log.Debugf("export response %+v", nodeExport.response)
@@ -442,8 +442,6 @@ func (cs *CsiNfsService) callExportNfsVolume(ctx context.Context, nodeIPAddress 
 		deleteNfsClient(nodeIPAddress)
 		return nil, err
 	}
-	log.Info("got NFS grpc client")
-	log.Info("exporting nfs volume")
 	exportNfsVolumeResponse, err := nodeClient.ExportNfsVolume(ctx, exportNfsVolumeRequest)
 	log.Infof("exportNfsVolume result %+v ... %v", exportNfsVolumeResponse, err)
 	return exportNfsVolumeResponse, err

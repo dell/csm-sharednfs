@@ -26,13 +26,13 @@ import (
 	"time"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 )
 
 var (
-	nodeStageTimeout   = 10 * time.Second
-	nodePublishTimeout = 10 * time.Second
+	defaultTimeout       = 10 * time.Second
+	nodeStageTimeout     = defaultTimeout
+	nodeUnpublishTimeout = defaultTimeout
 )
 
 func (ns *CsiNfsService) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
@@ -68,7 +68,7 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 	// Get lock for concurrency
 	serviceName := VolumeIDToServiceName(req.VolumeId)
 
-	log.Infof("shared-nfs NodeStageVolume called volumeID %s StagingPath", req.VolumeId, req.StagingTargetPath)
+	log.Infof("shared-nfs NodeStageVolume called volumeID: %s, StagingPath: %s", req.VolumeId, req.StagingTargetPath)
 
 	// First, locate the service
 	// TODO are we using the vxflexos namespace?
@@ -124,43 +124,40 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 		err  error
 	}
 	var result cmdResult
-	cmdDone := make(chan cmdResult, 1)
-
-	// track how long it takes to get a lock
-	start := time.Now()
-	uuid := uuid.New()
-	log.Infof("trying to acquire lock for %s", uuid)
+	mountCh := make(chan cmdResult, 1)
 
 	// get a lock on mount cmd
 	mountMutex.Lock()
 	defer mountMutex.Unlock()
-	log.Infof("got lock for %s after %s", uuid, time.Since(start))
 
-	dl, ok := ctx.Deadline()
-	var to time.Duration
+	stageDeadline, ok := ctx.Deadline()
+	var stageTimeout time.Duration
 	if ok {
-		to = time.Until(dl)
+		stageTimeout = time.Until(stageDeadline)
 	}
 
 	for i := 1; ; i++ {
-		mountTimeout := time.Duration(float64(to) * 0.1 * float64(i))
+		// divide the time allocated for the NodeStage request amongst mount attempts,
+		// increasing the timeout for the mount attempt with each successive retry in an
+		// effort to avoid getting stuck if one of the attempts hang.
+		mountTimeout := time.Duration(float64(stageTimeout) * 0.1 * float64(i))
 		mountCtx, mntCancel := context.WithTimeout(ctx, mountTimeout)
 
 		go func() {
 			defer mntCancel()
-			log.Infof("ExportNfsVolume calling MountVolume for volume %s, with timeout: %+v", req.VolumeId, mountTimeout)
+			log.Infof("ExportNfsVolume calling mount for volume %s, with timeout: %+v", req.VolumeId, mountTimeout)
 			outb, err := cmd.CombinedOutput()
-			cmdDone <- cmdResult{outb, err}
+			mountCh <- cmdResult{outb, err}
 		}()
 
 		select {
 		case <-mountCtx.Done():
-			log.Warnf("pod mount local timed out for uuid %s. retrying...", uuid)
+			log.Warnf("mount attempt timed out for volume %s. retrying...", req.VolumeId)
 		case <-ctx.Done():
-			killerr := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-			log.Errorf("mount command timed out %v, pid %d, killerr %v", cmd.Args, cmd.Process.Pid, killerr)
+			killErr := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+			log.Errorf("NodeStageVolume timed out while trying to mount volume %s. cmd: %v, pid: %d, killErr: %v", req.VolumeId, cmd.Args, cmd.Process.Pid, killErr)
 			return &csi.NodeStageVolumeResponse{}, fmt.Errorf("NodeStage Mount command timeout")
-		case result = <-cmdDone:
+		case result = <-mountCh:
 			if result.err != nil {
 				if result.outb != nil {
 					log.Infof("%s NodeStage Mount command returned %s", req.VolumeId, string(result.outb))
@@ -209,7 +206,7 @@ func (ns *CsiNfsService) NodeUnstageVolume(_ context.Context, req *csi.NodeUnsta
 		log.Infof("shared-nfs NodeUnstage umount target %s: error: %s\n%s", target, err, string(out))
 		return &csi.NodeUnstageVolumeResponse{}, err
 	}
-	log.Infof("shared-nfs NodeUnstage umount target no error: %s in %s:\n%s", target, time.Since(start), string(out))
+	log.Infof("shared-nfs NodeUnstage umount target succeeded: %s in %s:\n%s", target, time.Since(start), string(out))
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
 
@@ -237,11 +234,11 @@ func (ns *CsiNfsService) NodePublishVolume(ctx context.Context, req *csi.NodePub
 		}
 		return resp, err
 	}
-	log.Infof("shared-nfs NodePublish umount target no error: %s in %s:\n%s", req.TargetPath, time.Since(start), string(out))
+	log.Infof("shared-nfs NodePublish umount target succeeded: %s in %s:\n%s", req.TargetPath, time.Since(start), string(out))
 	return resp, nil
 }
 
-func (ns *CsiNfsService) NodeUnpublishVolume(_ context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
+func (ns *CsiNfsService) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 	start := time.Now()
 	target := req.TargetPath
 	// Get lock for concurrency
@@ -252,22 +249,33 @@ func (ns *CsiNfsService) NodeUnpublishVolume(_ context.Context, req *csi.NodeUnp
 	}
 
 	// Attempt to sync the directory, but do not fail if unable to.
-	cmd := exec.Command("sync", "-f", target)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	syncCtx, cancelSync := context.WithTimeout(ctx, nodeUnpublishTimeout)
+	defer cancelSync()
+	cmd := exec.CommandContext(syncCtx, "sync", "-f", target)
+
 	type syncCommandResult struct {
 		outb []byte
 		err  error
 	}
 	var syncResult syncCommandResult
 	syncDone := make(chan syncCommandResult, 1)
+	defer close(syncDone)
+
 	go func() {
 		outb, err := cmd.CombinedOutput()
-		syncDone <- syncCommandResult{outb, err}
+
+		select {
+		case <-syncCtx.Done():
+		default:
+			syncDone <- syncCommandResult{outb, err}
+		}
 	}()
+
 	select {
-	case <-time.After(10 * time.Second):
-		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		log.Errorf("sync command timed out %s: %v", req.VolumeId, cmd.Args)
+	case <-ctx.Done():
+		log.Error(ctx.Err().Error())
+	case <-syncCtx.Done():
+		log.Errorf("sync command timed out %s; %v; err: %s", req.VolumeId, cmd.Args, syncCtx.Err().Error())
 	case syncResult = <-syncDone:
 		log.Infof("sync completed %s: %s", req.VolumeId, string(syncResult.outb))
 	}
@@ -279,7 +287,7 @@ func (ns *CsiNfsService) NodeUnpublishVolume(_ context.Context, req *csi.NodeUnp
 		log.Infof("shared-nfs NodeUnpublish umount target %s: error: %s\n%s", target, err, string(out))
 		return &csi.NodeUnpublishVolumeResponse{}, err
 	}
-	log.Infof("shared-nfs NodeUnpublish umount target no error: %s in %s:\n%s", target, time.Since(start), string(out))
+	log.Infof("shared-nfs NodeUnpublish umount target succeeded: %s in %s:\n%s", target, time.Since(start), string(out))
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 

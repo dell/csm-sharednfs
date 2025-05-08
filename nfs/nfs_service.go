@@ -129,7 +129,7 @@ func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsV
 	defer nfs.nfsUnlockPV(req.VolumeId)
 
 	// Check for idempotent request
-	log.Infof("ExportNfsVolume checking for idenpotent request: %s", req.VolumeId)
+	log.Infof("ExportNfsVolume checking for idempotent request: %s", req.VolumeId)
 	statResult, _ := os.Stat(NfsExportDirectory + "/" + req.VolumeId)
 	target := NfsExportDirectory + "/" + req.VolumeId
 	exists, _ := CheckExport(target + "/")
@@ -144,31 +144,31 @@ func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsV
 	}
 
 	path := ""
-mountRetry:
-	for {
-		type mountResponse struct {
-			path string
-			err  error
-		}
-		responseCh := make(chan mountResponse)
-		go func() {
-			log.Infof("ExportNfsVolume calling MountVolume for volume %s", req.VolumeId)
-			path, err := nfsService.vcsi.MountVolume(ctx, req.VolumeId, "", NfsExportDirectory, req.ExportNfsContext)
-			responseCh <- mountResponse{path, err}
-		}()
-
-		select {
-		case <-ctx.Done():
-			log.Errorf("MountVolume request timed out for volume %s", req.VolumeId)
-			return nil, ctx.Err()
-		case mount := <-responseCh:
-			if mount.err != nil {
-				return resp, mount.err
-			}
-			path = mount.path
-			break mountRetry
-		}
+	type mountResponse struct {
+		path string
+		err  error
 	}
+	mountCh := make(chan mountResponse)
+	// run export as an async request so we can monitor the parent context
+	// and continue execution if the context times out
+	go func() {
+		log.Infof("ExportNfsVolume calling MountVolume for volume %s", req.VolumeId)
+		path, err := nfsService.vcsi.MountVolume(ctx, req.VolumeId, "", NfsExportDirectory, req.ExportNfsContext)
+		mountCh <- mountResponse{path, err}
+	}()
+
+	select {
+	case <-ctx.Done():
+		log.Errorf("MountVolume request timed out for volume %s", req.VolumeId)
+		return nil, ctx.Err()
+	case mount := <-mountCh:
+		if mount.err != nil {
+			log.Errorf("MountVolume request failed for volume %s", req.VolumeId)
+			return resp, mount.err
+		}
+		path = mount.path
+	}
+
 	resp.VolumeId = req.VolumeId
 	context := req.ExportNfsContext
 	context["MountPath"] = path
