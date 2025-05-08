@@ -277,20 +277,7 @@ exportRetry:
 			log.Infof("Retrying calling ExportNfsVolume %s", exportNfsVolumeRequest.VolumeId)
 		}
 	}
-	// if r := <-resp; r.err != nil {
-	// 	// Give the node time to catch up, e.g. have the ISCSI path available
-	// 	time.Sleep(10 * time.Second)
-	// 	// Retry the call to ExportNfsVolume if the first attempt failed
-	// 	start := time.Now()
-	// 	log.Infof("Retrying calling ExportNfsVolume %s", exportNfsVolumeRequest.VolumeId)
-	// 	exportNfsVolumeContext, exportNfsVolumeCancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	// 	nodeResponse, nodeError := cs.callExportNfsVolume(exportNfsVolumeContext, nodeIPAddress, exportNfsVolumeRequest)
-	// 	log.Infof("node ExportNfsVolume took %v error %v", time.Since(start), nodeError)
-	// 	exportNfsVolumeCancel()
-	// 	if nodeError != nil {
-	// 		return nil, nodeError
-	// 	}
-	// }
+
 	log.Infof("ExportNfsVolume %s successful", exportNfsVolumeRequest.VolumeId)
 
 	// Create the endpointslice
@@ -380,20 +367,6 @@ exportRetry:
 		return nil, err
 	}
 
-	//	// Wait on the node processing to complete
-	//	log.Infof("waiting on node done %s %s...", nodeIPAddress, name)
-	//	wg.Wait()
-	//
-	//	if nodeError != nil {
-	//		// Retry the call to ExportNfsVolume if the first attempt failed
-	//		start := time.Now()
-	//		log.Infof("synchronously calling ExportNfsVolume")
-	//		nodeResponse, nodeError = cs.callExportNfsVolume(ctx, nodeIPAddress, exportNfsVolumeRequest)
-	//		log.Infof("node ExportNfsVolume took %v error %v", time.Since(start), nodeError)
-	//		if nodeError != nil {
-	//			return nil, nodeError
-	//		}
-	//	}
 	return service, nil
 }
 

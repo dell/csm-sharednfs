@@ -255,7 +255,6 @@ func ResyncNFSMountd(generation int64) error {
 	var err error
 	var output []byte
 	for retries := 0; retries < 2; retries++ {
-		//output, err = GetLocalExecutor().ExecuteCommand(chroot, nodeRoot, exportfs, "-r", "-a")
 		output, err = GetLocalExecutor().ExecuteCommand(chroot, nodeRoot, exportfs, "-r")
 		if err == nil {
 			syncedGeneration = generation

@@ -110,11 +110,7 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 	// Mounting the volume
 	log.Infof("shared-nfs NodeStage attempting mount %s to %s", mountSource, target)
 
-	//	mountContext, mountCancel := context.WithTimeout(context.Background(), 3*time.Second)
-	//	defer mountCancel()
-	//	output, err = ns.executor.ExecuteCommandContext(mountContext, "mount", "-t", "nfs4", mountSource, target)
-	//	// TODO maybe put fsType nfs4 in gofsutil
-
+	// TODO maybe put fsType nfs4 in gofsutil
 	cmd := exec.Command("mount", "-t", "nfs4", "-o", "max_connect=2", mountSource, target)
 	log.Infof("%s NodeStage mount mommand args: %v", req.VolumeId, cmd.Args)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
