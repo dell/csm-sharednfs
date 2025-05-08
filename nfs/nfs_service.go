@@ -204,7 +204,7 @@ mountRetry:
 	log.Infof("ls -ld %s:\n %s", path, string(out))
 
 	// Add entry in /etc/exports
-	options := "(rw,no_subtree_check)"
+	options := "(rw,no_subtree_check,no_root_squash)"
 	optionsString := nfsService.podCIDR + options
 	// Add the link-local overlay network for OCP. TODO: add conditionally?
 	optionsString = optionsString + " 169.254.0.0/17" + options
