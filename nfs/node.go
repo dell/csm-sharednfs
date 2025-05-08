@@ -247,7 +247,6 @@ func (ns *CsiNfsService) NodeUnpublishVolume(ctx context.Context, req *csi.NodeU
 	// Attempt to sync the directory, but do not fail if unable to.
 	syncCtx, cancelSync := context.WithTimeout(ctx, nodeUnpublishTimeout)
 	defer cancelSync()
-	cmd := exec.CommandContext(syncCtx, "sync", "-f", target)
 
 	type syncCommandResult struct {
 		outb []byte
@@ -258,7 +257,7 @@ func (ns *CsiNfsService) NodeUnpublishVolume(ctx context.Context, req *csi.NodeU
 	defer close(syncDone)
 
 	go func() {
-		outb, err := cmd.CombinedOutput()
+		outb, err := ns.executor.ExecuteCommandContext(syncCtx, "sync", "-f", target)
 
 		select {
 		case <-syncCtx.Done():
@@ -271,7 +270,7 @@ func (ns *CsiNfsService) NodeUnpublishVolume(ctx context.Context, req *csi.NodeU
 	case <-ctx.Done():
 		log.Error(ctx.Err().Error())
 	case <-syncCtx.Done():
-		log.Errorf("sync command timed out %s; %v; err: %s", req.VolumeId, cmd.Args, syncCtx.Err().Error())
+		log.Errorf("sync command timed out %s; err: %s", req.VolumeId, syncCtx.Err().Error())
 	case syncResult = <-syncDone:
 		log.Infof("sync completed %s: %s", req.VolumeId, string(syncResult.outb))
 	}
