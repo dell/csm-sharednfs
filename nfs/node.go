@@ -30,7 +30,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var nodeStageTimeout = 10 * time.Second
+var NfsMountTimeout = 20 * time.Second // timeout to wait on mount -t nfs in NodeStage
+var nodeStageRetry = 5 * time.Second
 var nodePublishTimeout = 10 * time.Second
 
 func (ns *CsiNfsService) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
@@ -52,12 +53,10 @@ func (ns *CsiNfsService) NodeStageVolume(ctx context.Context, req *csi.NodeStage
 			return resp, err
 		}
 		log.Infof("NodeStageVolume %s retries %d error %s", req.VolumeId, retries, err)
-		time.Sleep(nodeStageTimeout)
+		time.Sleep(nodeStageRetry)
 	}
 	return resp, err
 }
-
-var MountVolumeLock sync.Mutex
 
 func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 	resp := &csi.NodeStageVolumeResponse{}
@@ -66,7 +65,7 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 	// Get lock for concurrency
 	serviceName := VolumeIDToServiceName(req.VolumeId)
 
-	log.Infof("csi-nfs NodeStageVolume called volumeID %s StagingPath", req.VolumeId, req.StagingTargetPath)
+	log.Infof("csi-nfs nodeStageVolume called volumeID %s StagingPath %s", req.VolumeId, req.StagingTargetPath)
 
 	// First, locate the service
 	// TODO are we using the vxflexos namespace?
@@ -80,90 +79,155 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 	}
 	// Check if already mounted
 	mountSource := service.Spec.ClusterIP + ":" + NfsExportDirectory + "/" + serviceName
-	if ns.isAlreadyMounted(mountSource) {
-		log.Infof("mountSource %s is already mounted- not remounting", mountSource)
+	log.Infof("nodeStageVolume mountSource %s %s", req.VolumeId, mountSource)
+	existingMount := ns.getExistingMount(mountSource)
+	if existingMount != "" {
+		log.Infof("%s mountSource %s is already mounted: %s", req.VolumeId, mountSource, existingMount)
 		return resp, nil
 	}
+	ns.checkForConflictingMount(service.Spec.ClusterIP)
 
 	if req.StagingTargetPath == "" {
 		return resp, fmt.Errorf("NodeStageVolume %s failed, TargetPath empty", req.VolumeId)
 	}
 	target := req.StagingTargetPath
 	// Make sure the target exists
-	log.Infof("Making directory for stagingtarget path %s", target)
+	log.Infof("nodeStageVolume Making directory for stagingtarget path %s", target)
 	output, err := ns.executor.ExecuteCommand("mkdir", "-p", target)
 	if err != nil {
-		log.Errorf("StagingTarget path %s not created: %s ... proceeding anyway: %s \n", target, err, string(output))
+		log.Errorf("nodeStageVolume StagingTarget path %s not created: %s ... proceeding anyway: %s \n", target, err, string(output))
 		// Unmount the target directory
 		out, err := ns.executor.ExecuteCommand("umount", target)
-		log.Infof("csi-nfs NodeStage %s umount target error: %v:\n%s", target, err, string(out))
+		log.Infof("nodeStageVolume NodeStage %s umount target error: %v:\n%s", target, err, string(out))
 	}
 
-	log.Info("Changing permissions of target path")
+	log.Info("nodeStageVolume Changing permissions of target path")
 	_, err = ns.executor.ExecuteCommand("chmod", "02777", target)
 	if err != nil {
 		log.Errorf("Chmod target path failed: %s: \n%s", err, string(output))
 	}
 
 	// Mounting the volume
-	log.Infof("csi-nfs NodeStage attempting mount %s to %s", mountSource, target)
+	log.Infof("nodeStageVolume csi-nfs NodeStage attempting mount %s to %s", mountSource, target)
 
 	//	mountContext, mountCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	//	defer mountCancel()
 	//	output, err = ns.executor.ExecuteCommandContext(mountContext, "mount", "-t", "nfs4", mountSource, target)
 	//	// TODO maybe put fsType nfs4 in gofsutil
 
-	cmd := exec.Command("mount", "-t", "nfs4", "-o", "max_connect=2", mountSource, target)
-	log.Infof("%s NodeStage mount mommand args: %v", req.VolumeId, cmd.Args)
+	if MountOptions == "" {
+		MountOptions = "max_connect=2"
+	}
+
+	cmd := exec.Command("mount", "-t", "nfs4", "-o", MountOptions, mountSource, target)
+	log.Infof("%s nodeStageVolume  mount mommand args: %v", req.VolumeId, cmd.Args)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
-	type cmdResult struct {
-		outb []byte
-		err  error
-	}
-	var result cmdResult
-	cmdDone := make(chan cmdResult, 1)
-	MountVolumeLock.Lock()
-	go func() {
-		outb, err := cmd.CombinedOutput()
-		cmdDone <- cmdResult{outb, err}
-	}()
-	select {
-	case <-time.After(10 * time.Second):
-		killerr := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		log.Errorf("mount command timed out %v, pid %d, killerr %v", cmd.Args, cmd.Process.Pid, killerr)
-		MountVolumeLock.Unlock()
-		return &csi.NodeStageVolumeResponse{}, fmt.Errorf("NodeStage Mount command timeout")
-	case result = <-cmdDone:
-		MountVolumeLock.Unlock()
-		if result.err != nil {
-			if result.outb != nil {
-				log.Infof("%s NodeStage Mount command returned %s", req.VolumeId, string(result.outb))
-			}
-			log.Infof("%s NodeStage Mount failed: %v : %s", req.VolumeId, cmd.Args, result.err.Error())
-			return &csi.NodeStageVolumeResponse{}, result.err
-		} else {
-			log.Infof("NodeStage Mount ALL GOOD result: %v : %s", cmd.Args, string(result.outb))
-		}
-	}
-	return &csi.NodeStageVolumeResponse{}, nil
+	// Run the mount command. It grabs a lock so that only one mount command runs at a time.
+	// The mount command can time out after NfsMountTimeout.
+	err = ns.runMountCommand(ctx, req.VolumeId, cmd)
+	return &csi.NodeStageVolumeResponse{}, err
+
+	// type cmdresult struct {
+	// 	outb []byte
+	// 	err  error
+	// }
+	// var result cmdResult
+	// cmdDone := make(chan cmdResult, 1)
+	// //MountVolumeLock.Lock()
+	// go func() {
+	// 	outb, err := cmd.CombinedOutput()
+	// 	cmdDone <- cmdResult{outb, err}
+	// }()
+	// select {
+	// case <-time.After(NfsMountTimeout):
+	// 	killerr := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	// 	log.Errorf("mount command timed out %v, pid %d, killerr %v", cmd.Args, cmd.Process.Pid, killerr)
+	// 	//MountVolumeLock.Unlock()
+	// 	return &csi.NodeStageVolumeResponse{}, fmt.Errorf("NodeStage Mount command timeout")
+	// case result = <-cmdDone:
+	// 	//MountVolumeLock.Unlock()
+	// 	if result.err != nil {
+	// 		if result.outb != nil {
+	// 			log.Infof("%s NodeStage Mount command returned %s", req.VolumeId, string(result.outb))
+	// 		}
+	// 		log.Infof("%s NodeStage Mount failed: %v : %s", req.VolumeId, cmd.Args, result.err.Error())
+	// 		return &csi.NodeStageVolumeResponse{}, result.err
+	// 	} else {
+	// 		log.Infof("NodeStage Mount ALL GOOD result: %v : %s", cmd.Args, string(result.outb))
+	// 	}
+	// }
+	// return &csi.NodeStageVolumeResponse{}, nil
 }
 
-// isAlreadyMounted returns true if there is already a mount for that device
-func (ns *CsiNfsService) isAlreadyMounted(device string) bool {
+var MountVolumeLock sync.Mutex
+
+// Mount volume attempts a mount based on the mount command, or returns failure if another mount is in progress
+func (ns *CsiNfsService) runMountCommand(ctx context.Context, volumeId string, cmd *exec.Cmd) error {
+	if MountVolumeLock.TryLock() {
+		defer MountVolumeLock.Unlock()
+		log.Infof("%s nodeStageVolume  mount mommand args: %v", volumeId, cmd.Args)
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+		type cmdResult struct {
+			outb []byte
+			err  error
+		}
+		var result cmdResult
+		cmdDone := make(chan cmdResult, 1)
+		//MountVolumeLock.Lock()
+		go func() {
+			outb, err := cmd.CombinedOutput()
+			cmdDone <- cmdResult{outb, err}
+		}()
+		select {
+		case <-time.After(NfsMountTimeout):
+			killerr := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+			log.Errorf("mount command timed out %v, pid %d, killerr %v", cmd.Args, cmd.Process.Pid, killerr)
+			//MountVolumeLock.Unlock()
+			return fmt.Errorf("NodeStage Mount command timeout")
+		case result = <-cmdDone:
+			//MountVolumeLock.Unlock()
+			if result.err != nil {
+				if result.outb != nil {
+					log.Infof("%s NodeStage Mount command returned %s", volumeId, string(result.outb))
+				}
+				log.Infof("%s NodeStage Mount failed: %v : %s", volumeId, cmd.Args, result.err.Error())
+				return result.err
+			} else {
+				log.Infof("NodeStage Mount ALL GOOD result: %v : %s", cmd.Args, string(result.outb))
+				return nil
+			}
+		}
+	} else {
+		return fmt.Errorf("runMountCommand: Could not obtain MountVolumeLock %s", volumeId)
+	}
+}
+
+// getExistingMount returns a string existing mount matching the input pattern, or nil if not found
+func (ns *CsiNfsService) getExistingMount(match string) string {
 	out, err := ns.executor.ExecuteCommand("mount")
 	if err != nil {
 		log.Errorf("mount command failed while checking if already mounted: %s", err.Error())
 	} else {
 		lines := strings.Split(string(out), "\n")
 		for _, line := range lines {
-			if strings.Contains(line, device) {
-				log.Infof("%s isAlreayMounted", device)
-				return true
+			if strings.Contains(line, match) {
+				log.Infof("%s isAlreayMounted", match)
+				return line
 			}
 		}
 	}
-	return false
+	return ""
+}
+
+func (ns *CsiNfsService) checkForConflictingMount(serviceIP string) string {
+	match := ns.getExistingMount(serviceIP)
+	if match != "" {
+		log.Errorf("Conflicting mount %s", match)
+		return match
+	}
+	return ""
 }
 
 func (ns *CsiNfsService) NodeUnstageVolume(_ context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {

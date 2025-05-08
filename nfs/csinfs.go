@@ -247,6 +247,7 @@ var (
 	NfsExportDirectory string // The path with in NodeRoot where the driver's NFS exports should be (e.g. /nfs/exports)
 	DriverNamespace    string // The namespace the driver is in. Used to locate Services and EndpointSlices.
 	DriverName         string // The name of the driver as reported to the CSI nodes (e.g. csi-vxflexos.dellemc.com)
+	MountOptions       string // Extran mount options (see https://man7.org/linux/man-pages/man5/nfs.5.html)
 )
 
 func (s *CsiNfsService) BeforeServe(ctx context.Context, _ *gocsi.StoragePlugin, _ net.Listener) error {
@@ -268,6 +269,11 @@ func (s *CsiNfsService) BeforeServe(ctx context.Context, _ *gocsi.StoragePlugin,
 	// Validate the global variables that must be set up
 	if err := s.validateGlobalVariables(); err != nil {
 		return err
+	}
+
+	MountOptions = os.Getenv("MountOptions")
+	if (MountOptions != "") {
+		log.Infof("MountOptions: %s", MountOptions)
 	}
 
 	// Set up a connection to kubernetes

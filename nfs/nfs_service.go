@@ -175,15 +175,15 @@ func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsV
 		return resp, err
 	}
 
-	//log.Infof("Calling chroot chmod %s %o", path, NfsFileMode)
-	//out, err := GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "chmod", NfsFileModeString, path)
-	//if err != nil {
-	//	log.Errorf("failed chroot chmod output: %s %s", err, string(out))
-	//	return resp, err
-	//}
+	log.Infof("Calling chroot chmod %s %o", path, NfsFileMode)
+	out, err := GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "chmod", NfsFileModeString, path)
+	if err != nil {
+		log.Errorf("failed chroot chmod output: %s %s", err, string(out))
+		return resp, err
+	}
 
 	// Read the directory entry for the path (debug)
-	out, err := GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "ls", "-ld", path)
+	out, err = GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "ls", "-ld", path)
 	if err != nil {
 		log.Errorf("failed chroot output: %s %s", err, string(out))
 		return resp, err
@@ -197,6 +197,7 @@ func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsV
 	// Add the link-local overlay network for OCP. TODO: add conditionally?
 	optionsString = optionsString + " 169.254.0.0/17" + options
 	optionsString = optionsString + " 127.0.0.1/32" + options
+
 
 	log.Infof("ExportNfsVolume Calling AddExport %s/ %s", path, optionsString)
 	generation, err = AddExport(path+"/", optionsString)

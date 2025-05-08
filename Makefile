@@ -12,6 +12,7 @@
 #
 
 build:
+	go clean ./...
 	cd nfs/k8s && go build
 	cd nfs && go build
 
