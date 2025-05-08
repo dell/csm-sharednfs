@@ -18,6 +18,7 @@ package nfs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -130,16 +131,26 @@ func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsV
 
 	// Check for idempotent request
 	log.Infof("ExportNfsVolume checking for idempotent request: %s", req.VolumeId)
-	statResult, _ := os.Stat(NfsExportDirectory + "/" + req.VolumeId)
+	statResult, err := opSys.Stat(NfsExportDirectory + "/" + req.VolumeId)
+	if err != nil && errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("path not found: %s", NfsExportDirectory+"/"+req.VolumeId)
+	}
+
 	target := NfsExportDirectory + "/" + req.VolumeId
-	exists, _ := CheckExport(target + "/")
+	exists, err := CheckExport(target + "/")
+	if err != nil {
+		return nil, err
+	}
+
 	if statResult != nil && exists {
 		log.Infof("ExportNfsVolume %s already exported", req.VolumeId)
 		if resp.ExportNfsContext == nil {
 			resp.ExportNfsContext = make(map[string]string)
 		}
+
 		resp.ExportNfsContext["idenpotent"] = "true"
 		log.Infof("ExportNfsVolume idempotent request volume %s", req.VolumeId)
+
 		return resp, nil
 	}
 
@@ -173,7 +184,7 @@ func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsV
 	context := req.ExportNfsContext
 	context["MountPath"] = path
 	log.Infof("Calling Chown %s %d %d", path, RootUID, nfsGroupID)
-	err := opSys.Chown(path, RootUID, nfsGroupID)
+	err = opSys.Chown(path, RootUID, nfsGroupID)
 	if err != nil {
 		log.Errorf("failed chown output: %s", err)
 		return resp, err
