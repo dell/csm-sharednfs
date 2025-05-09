@@ -160,7 +160,7 @@ func (ns *CsiNfsService) isAlreadyMounted(device string) bool {
 		lines := strings.Split(string(out), "\n")
 		for _, line := range lines {
 			if strings.Contains(line, device) {
-				log.Infof("%s isAlreayMounted", device)
+				log.Infof("%s isAlreadyMounted", device)
 				return true
 			}
 		}

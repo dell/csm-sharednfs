@@ -628,7 +628,7 @@ func TestResyncNFSMountd(t *testing.T) {
 				return me
 			}
 			retrySleep = 10 * time.Millisecond
-			me.EXPECT().ExecuteCommand(chroot, nodeRoot, exportfs, "-r", "-a").Return(tt.mockReturn, tt.mockError).AnyTimes()
+			me.EXPECT().ExecuteCommand(chroot, nodeRoot, exportfs, "-r").Return(tt.mockReturn, tt.mockError).AnyTimes()
 
 			if tt.resyncg != 0 {
 				syncedGeneration = tt.resyncg
