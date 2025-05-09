@@ -131,13 +131,13 @@ func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsV
 
 	// Check for idempotent request
 	log.Infof("ExportNfsVolume checking for idempotent request: %s", req.VolumeId)
-	statResult, err := opSys.Stat(NfsExportDirectory + "/" + req.VolumeId)
+	stagingPath := NfsExportDirectory + "/" + VolumeIDToServiceName(req.VolumeId)
+	statResult, err := opSys.Stat(stagingPath)
 	if err != nil && errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("path not found: %s", NfsExportDirectory+"/"+req.VolumeId)
 	}
 
-	target := NfsExportDirectory + "/" + req.VolumeId
-	exists, err := CheckExport(target + "/")
+	exists, err := CheckExport(stagingPath + "/")
 	if err != nil {
 		return nil, err
 	}
