@@ -126,44 +126,27 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 	mountMutex.Lock()
 	defer mountMutex.Unlock()
 
-	stageDeadline, ok := ctx.Deadline()
-	var stageTimeout time.Duration
-	if ok {
-		stageTimeout = time.Until(stageDeadline)
-	}
+	go func() {
+		log.Infof("ExportNfsVolume calling mount for volume %s", req.VolumeId)
+		outb, err := cmd.CombinedOutput()
+		mountCh <- cmdResult{outb, err}
+	}()
 
-	for i := 1; ; i++ {
-		// divide the time allocated for the NodeStage request amongst mount attempts,
-		// increasing the timeout for the mount attempt with each successive retry in an
-		// effort to avoid getting stuck if one of the attempts hang.
-		mountTimeout := time.Duration(float64(stageTimeout) * 0.1 * float64(i))
-		mountCtx, mntCancel := context.WithTimeout(ctx, mountTimeout)
-
-		go func() {
-			defer mntCancel()
-			log.Infof("ExportNfsVolume calling mount for volume %s, with timeout: %+v", req.VolumeId, mountTimeout)
-			outb, err := cmd.CombinedOutput()
-			mountCh <- cmdResult{outb, err}
-		}()
-
-		select {
-		case <-mountCtx.Done():
-			log.Warnf("mount attempt timed out for volume %s. retrying...", req.VolumeId)
-		case <-ctx.Done():
-			killErr := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-			log.Errorf("NodeStageVolume timed out while trying to mount volume %s. cmd: %v, pid: %d, killErr: %v", req.VolumeId, cmd.Args, cmd.Process.Pid, killErr)
-			return &csi.NodeStageVolumeResponse{}, fmt.Errorf("NodeStage Mount command timeout")
-		case result = <-mountCh:
-			if result.err != nil {
-				if result.outb != nil {
-					log.Infof("%s NodeStage Mount command returned %s", req.VolumeId, string(result.outb))
-				}
-				log.Infof("%s NodeStage Mount failed: %v : %s", req.VolumeId, cmd.Args, result.err.Error())
-				return &csi.NodeStageVolumeResponse{}, result.err
-			} else {
-				log.Infof("NodeStage Mount ALL GOOD result: %v : %s", cmd.Args, string(result.outb))
-				return &csi.NodeStageVolumeResponse{}, nil
+	select {
+	case <-ctx.Done():
+		killErr := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		log.Errorf("NodeStageVolume timed out while trying to mount volume %s. cmd: %v, pid: %d, killErr: %v", req.VolumeId, cmd.Args, cmd.Process.Pid, killErr)
+		return &csi.NodeStageVolumeResponse{}, fmt.Errorf("NodeStage Mount command timeout")
+	case result = <-mountCh:
+		if result.err != nil {
+			if result.outb != nil {
+				log.Infof("%s NodeStage Mount command returned %s", req.VolumeId, string(result.outb))
 			}
+			log.Infof("%s NodeStage Mount failed: %v : %s", req.VolumeId, cmd.Args, result.err.Error())
+			return &csi.NodeStageVolumeResponse{}, result.err
+		} else {
+			log.Infof("NodeStage Mount ALL GOOD result: %v : %s", cmd.Args, string(result.outb))
+			return &csi.NodeStageVolumeResponse{}, nil
 		}
 	}
 }
