@@ -128,7 +128,7 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 
 	go func() {
 		log.Infof("ExportNfsVolume calling mount for volume %s", req.VolumeId)
-		outb, err := cmd.CombinedOutput()
+		outb, err := ns.executor.GetCombinedOutput(cmd)
 		mountCh <- cmdResult{outb, err}
 	}()
 

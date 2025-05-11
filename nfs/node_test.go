@@ -28,6 +28,9 @@ import (
 	"github.com/dell/csm-sharednfs/nfs/mocks"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 var (
@@ -44,10 +47,11 @@ func TestNodeStageVolume(t *testing.T) {
 		req *csi.NodeStageVolumeRequest
 	}
 	tests := []struct {
-		name    string
-		args    args
-		want    *csi.NodeStageVolumeResponse
-		wantErr bool
+		name             string
+		args             args
+		getCsiNFSService func() *CsiNfsService
+		want             *csi.NodeStageVolumeResponse
+		wantErr          bool
 	}{
 		{
 			name: "success",
@@ -59,6 +63,37 @@ func TestNodeStageVolume(t *testing.T) {
 					},
 					StagingTargetPath: "path/to/stage",
 				},
+				ctx: context.Background(),
+			},
+			getCsiNFSService: func() *CsiNfsService {
+
+				k8sService := &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "",
+						Name:      "vol1",
+					},
+					Spec: v1.ServiceSpec{
+						ClusterIP: "1.2.3.4",
+					},
+				}
+
+				clientset := fake.NewSimpleClientset(k8sService)
+
+				client := &k8s.Client{
+					Clientset: clientset,
+				}
+
+				executor := mocks.NewMockExecutor(gomock.NewController(t))
+				executor.EXPECT().ExecuteCommand("mount").Times(1).Return([]byte(string("")), nil)
+				executor.EXPECT().ExecuteCommand("mkdir", "-p", "path/to/stage").Times(1).Return([]byte(string("")), nil)
+				executor.EXPECT().ExecuteCommand("chmod", "02777", "path/to/stage").Times(1).Return([]byte(string("")), nil)
+				executor.EXPECT().GetCombinedOutput(gomock.Any()).Times(1).Return([]byte(string("")), nil)
+
+				return &CsiNfsService{
+					failureRetries: 10,
+					k8sclient:      client,
+					executor:       executor,
+				}
 			},
 			want:    &csi.NodeStageVolumeResponse{},
 			wantErr: false,
@@ -66,7 +101,7 @@ func TestNodeStageVolume(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service := &CsiNfsService{}
+			service := tt.getCsiNFSService()
 			got, err := service.NodeStageVolume(tt.args.ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NodeStageVolume() error = %v, wantErr %v", err, tt.wantErr)

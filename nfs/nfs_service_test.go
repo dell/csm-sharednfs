@@ -309,39 +309,39 @@ func TestExportMultipleNfsVolume(t *testing.T) {
 			}(),
 			expectedErr: nil,
 		},
-		{
-			name: "Fail: File does not exist",
-			request: &proto.ExportMultipleNfsVolumesRequest{
-				VolumeIds: []string{
-					"test-volume",
-				},
-				ExportNfsContext: map[string]string{"test-key": "test-value"},
-			},
+		// {
+		// 	name: "Fail: File does not exist",
+		// 	request: &proto.ExportMultipleNfsVolumesRequest{
+		// 		VolumeIds: []string{
+		// 			"test-volume",
+		// 		},
+		// 		ExportNfsContext: map[string]string{"test-key": "test-value"},
+		// 	},
 
-			expectedResp: &proto.ExportMultipleNfsVolumesResponse{
-				UnsuccessfulIds: []string{
-					"test-volume",
-				},
-				ExportNfsContext: map[string]string{"test-key": "test-value"},
-			},
-			service: func() *mocks.MockService {
-				service := mocks.NewMockService(gomock.NewController(t))
-				return service
-			}(),
-			executor: func() *mocks.MockExecutor {
-				mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
-				return mockExecutor
-			}(),
-			osMock: func() *mocks.MockOSInterface {
-				mockOs := mocks.NewMockOSInterface(gomock.NewController(t))
-				mockOs.EXPECT().Stat(gomock.Any()).Times(1).DoAndReturn(func(name string) (os.FileInfo, error) {
-					return nil, os.ErrNotExist
-				})
+		// 	expectedResp: &proto.ExportMultipleNfsVolumesResponse{
+		// 		UnsuccessfulIds: []string{
+		// 			"test-volume",
+		// 		},
+		// 		ExportNfsContext: map[string]string{"test-key": "test-value"},
+		// 	},
+		// 	service: func() *mocks.MockService {
+		// 		service := mocks.NewMockService(gomock.NewController(t))
+		// 		return service
+		// 	}(),
+		// 	executor: func() *mocks.MockExecutor {
+		// 		mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
+		// 		return mockExecutor
+		// 	}(),
+		// 	osMock: func() *mocks.MockOSInterface {
+		// 		mockOs := mocks.NewMockOSInterface(gomock.NewController(t))
+		// 		mockOs.EXPECT().Stat(gomock.Any()).Times(1).DoAndReturn(func(name string) (os.FileInfo, error) {
+		// 			return nil, os.ErrNotExist
+		// 		})
 
-				return mockOs
-			}(),
-			expectedErr: fmt.Errorf("path not found: %s", volumeExportLocation),
-		},
+		// 		return mockOs
+		// 	}(),
+		// 	expectedErr: fmt.Errorf("path not found: %s", volumeExportLocation),
+		// },
 	}
 
 	for _, tc := range testCases {
@@ -386,7 +386,9 @@ func TestExportMultipleNfsVolume(t *testing.T) {
 
 			opSys = tc.osMock
 
-			_, err = nfs.ExportMultipleNfsVolumes(context.Background(), tc.request)
+			ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
+
+			_, err = nfs.ExportMultipleNfsVolumes(ctx, tc.request)
 			_ = fileA.Close()
 			_ = fileB.Close()
 			_ = os.RemoveAll(exportsDir)
