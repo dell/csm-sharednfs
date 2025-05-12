@@ -226,7 +226,7 @@ func (ns *CsiNfsService) NodeUnpublishVolume(ctx context.Context, req *csi.NodeU
 
 	// Unmount the target directory
 	log.Infof("Attempting to unmount %s for volume %s", target, req.VolumeId)
-	out, err := ns.executor.ExecuteCommand("umount", "--force", target)
+	out, err := ns.executor.ExecuteCommand("umount", "--force", "-l", target)
 	if err != nil && !strings.Contains(err.Error(), "exit status 32") {
 		log.Infof("shared-nfs NodeUnpublish umount target %s: error: %s\n%s", target, err, string(out))
 		return &csi.NodeUnpublishVolumeResponse{}, err
