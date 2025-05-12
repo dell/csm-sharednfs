@@ -75,7 +75,7 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 	namespace := DriverNamespace
 	service, err := ns.k8sclient.GetService(ctx, namespace, serviceName)
 	if err != nil {
-		return resp, fmt.Errorf("err %s/%s not found: %+v", namespace, serviceName, service)
+		return resp, fmt.Errorf("could not get service Namespace: %s, ServiceName: %s, Service: %+v", namespace, serviceName, service)
 	}
 	if service.Spec.ClusterIP == "" {
 		return resp, fmt.Errorf("NodeStageVolume %s failed, service IP empty", req.VolumeId)

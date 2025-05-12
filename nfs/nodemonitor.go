@@ -139,7 +139,7 @@ func (s *CsiNfsService) pinger(node *v1.Node) {
 
 		resp, err := s.ping(&pingRequest)
 		if err != nil || (resp != nil && !resp.Ready) {
-			log.Errorf("pinger: error pinging node %s - error: %s", nodeStatus.nodeIP, err.Error())
+			log.Warnf("pinger: failed pinging node %s - err: %s", nodeStatus.nodeIP, err.Error())
 			if nodeStatus.online {
 				log.Infof("pinger: Node %s transitioned to offline", pingRequest.NodeIpAddress)
 			}
