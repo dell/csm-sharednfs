@@ -22,7 +22,6 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
@@ -111,9 +110,8 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 	log.Infof("shared-nfs NodeStage attempting mount %s to %s", mountSource, target)
 
 	// TODO maybe put fsType nfs4 in gofsutil
-	cmd := exec.Command("mount", "-t", "nfs4", "-o", "max_connect=2", mountSource, target) // #nosec : G204
-	log.Infof("%s NodeStage mount mommand args: %v", req.VolumeId, cmd.Args)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd := exec.CommandContext(ctx, "mount", "-t", "nfs4", "-o", "max_connect=2", mountSource, target) // #nosec : G204
+	log.Infof("%s NodeStage mount command args: %v", req.VolumeId, cmd.Args)
 
 	type cmdResult struct {
 		outb []byte
@@ -134,8 +132,7 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 
 	select {
 	case <-ctx.Done():
-		killErr := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		log.Errorf("NodeStageVolume timed out while trying to mount volume %s. cmd: %v, pid: %d, killErr: %v", req.VolumeId, cmd.Args, cmd.Process.Pid, killErr)
+		log.Errorf("NodeStageVolume timed out while trying to mount volume %s. cmd: %v", req.VolumeId, cmd.Args)
 		return &csi.NodeStageVolumeResponse{}, fmt.Errorf("NodeStage Mount command timeout")
 	case result = <-mountCh:
 		if result.err != nil {
