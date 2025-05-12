@@ -99,6 +99,54 @@ func TestNodeStageVolume(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "success - mkdir fails but still passes",
+			args: args{
+				req: &csi.NodeStageVolumeRequest{
+					VolumeId: "vol1",
+					VolumeCapability: &csi.VolumeCapability{
+						AccessMode: &csi.VolumeCapability_AccessMode{Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER},
+					},
+					StagingTargetPath: "path/to/stage",
+				},
+				ctx: context.Background(),
+			},
+			getCsiNFSService: func() *CsiNfsService {
+
+				k8sService := &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "",
+						Name:      "vol1",
+					},
+					Spec: v1.ServiceSpec{
+						ClusterIP: "1.2.3.4",
+					},
+				}
+
+				clientset := fake.NewSimpleClientset(k8sService)
+
+				client := &k8s.Client{
+					Clientset: clientset,
+				}
+
+				executor := mocks.NewMockExecutor(gomock.NewController(t))
+				executor.EXPECT().ExecuteCommand("mount").Times(1).Return([]byte(string("")), nil)
+
+				// mkdir fails but continues with success
+				executor.EXPECT().ExecuteCommand("mkdir", "-p", "path/to/stage").Times(1).Return([]byte(string("")), errors.New("mkdir error"))
+				executor.EXPECT().ExecuteCommand("umount", "path/to/stage").Times(1).Return([]byte(string("")), nil)
+				executor.EXPECT().ExecuteCommand("chmod", "02777", "path/to/stage").Times(1).Return([]byte(string("")), nil)
+				executor.EXPECT().GetCombinedOutput(gomock.Any()).Times(1).Return([]byte(string("")), nil)
+
+				return &CsiNfsService{
+					failureRetries: 10,
+					k8sclient:      client,
+					executor:       executor,
+				}
+			},
+			want:    &csi.NodeStageVolumeResponse{},
+			wantErr: false,
+		},
+		{
 			name: "error",
 			args: args{
 				req: &csi.NodeStageVolumeRequest{

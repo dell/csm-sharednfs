@@ -189,7 +189,7 @@ func (ns *CsiNfsService) NodeUnstageVolume(_ context.Context, req *csi.NodeUnsta
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
 
-func (ns *CsiNfsService) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
+func (ns *CsiNfsService) NodePublishVolume(_ context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	resp := &csi.NodePublishVolumeResponse{}
 	var err error
 	start := time.Now()

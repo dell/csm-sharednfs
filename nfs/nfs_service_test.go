@@ -353,7 +353,8 @@ func TestExportMultipleNfsVolume(t *testing.T) {
 
 			opSys = tc.osMock
 
-			ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+			defer cancel()
 
 			_, err = nfs.ExportMultipleNfsVolumes(ctx, tc.request)
 			_ = fileA.Close()
