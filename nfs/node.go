@@ -111,7 +111,7 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 	log.Infof("shared-nfs NodeStage attempting mount %s to %s", mountSource, target)
 
 	// TODO maybe put fsType nfs4 in gofsutil
-	cmd := exec.Command("mount", "-t", "nfs4", "-o", "max_connect=2", mountSource, target)
+	cmd := exec.Command("mount", "-t", "nfs4", "-o", "max_connect=2", mountSource, target) // #nosec : G204
 	log.Infof("%s NodeStage mount mommand args: %v", req.VolumeId, cmd.Args)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
