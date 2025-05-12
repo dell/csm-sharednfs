@@ -309,39 +309,6 @@ func TestExportMultipleNfsVolume(t *testing.T) {
 			}(),
 			expectedErr: nil,
 		},
-		// {
-		// 	name: "Fail: File does not exist",
-		// 	request: &proto.ExportMultipleNfsVolumesRequest{
-		// 		VolumeIds: []string{
-		// 			"test-volume",
-		// 		},
-		// 		ExportNfsContext: map[string]string{"test-key": "test-value"},
-		// 	},
-
-		// 	expectedResp: &proto.ExportMultipleNfsVolumesResponse{
-		// 		UnsuccessfulIds: []string{
-		// 			"test-volume",
-		// 		},
-		// 		ExportNfsContext: map[string]string{"test-key": "test-value"},
-		// 	},
-		// 	service: func() *mocks.MockService {
-		// 		service := mocks.NewMockService(gomock.NewController(t))
-		// 		return service
-		// 	}(),
-		// 	executor: func() *mocks.MockExecutor {
-		// 		mockExecutor := mocks.NewMockExecutor(gomock.NewController(t))
-		// 		return mockExecutor
-		// 	}(),
-		// 	osMock: func() *mocks.MockOSInterface {
-		// 		mockOs := mocks.NewMockOSInterface(gomock.NewController(t))
-		// 		mockOs.EXPECT().Stat(gomock.Any()).Times(1).DoAndReturn(func(name string) (os.FileInfo, error) {
-		// 			return nil, os.ErrNotExist
-		// 		})
-
-		// 		return mockOs
-		// 	}(),
-		// 	expectedErr: fmt.Errorf("path not found: %s", volumeExportLocation),
-		// },
 	}
 
 	for _, tc := range testCases {
