@@ -66,7 +66,6 @@ func TestNodeStageVolume(t *testing.T) {
 				ctx: context.Background(),
 			},
 			getCsiNFSService: func() *CsiNfsService {
-
 				k8sService := &v1.Service{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "",
@@ -111,7 +110,6 @@ func TestNodeStageVolume(t *testing.T) {
 				ctx: context.Background(),
 			},
 			getCsiNFSService: func() *CsiNfsService {
-
 				k8sService := &v1.Service{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "",
@@ -159,7 +157,6 @@ func TestNodeStageVolume(t *testing.T) {
 				ctx: context.Background(),
 			},
 			getCsiNFSService: func() *CsiNfsService {
-
 				k8sService := &v1.Service{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "",
