@@ -179,28 +179,39 @@ func (s *CsiNfsService) pinger(node *v1.Node) {
 // getNodeExportCounts will return a map of Node Name to number of nfs volumes that are exported
 // if the nodes are online.
 func (s *CsiNfsService) getNodeExportCounts(_ context.Context) map[string]int {
-	numberNodes := len(nodeIPAddress)
-	done := make(chan bool, numberNodes)
 	exportsMap := make(map[string]int, 0)
-	var nnodes int
 
 	log.Infof("initiating getExports")
+
+	type exportResp struct {
+		nodeName string
+		quantity int
+	}
+	var exportChs []chan exportResp
+
 	for _, status := range nodeIPAddress {
+		// give each go routine a channel to reply on
+		exportCh := make(chan exportResp)
+		exportChs = append(exportChs, exportCh)
+
 		go func() {
+			defer close(exportCh)
 			exports, err := s.getExports(status.nodeIP)
 			if err == nil && !status.inRecovery {
-				exportsMap[status.nodeName] = len(exports)
+				exportCh <- exportResp{status.nodeName, len(exports)}
 			} else {
 				log.Infof("node %s needs recovery", status.nodeIP)
 			}
-			done <- true
 		}()
-		nnodes++
 	}
 
 	log.Infof("waiting on getExports completion")
-	for range nnodes {
-		<-done
+	for _, exportCh := range exportChs {
+		// read data from the channel until it is closed
+		// if it is closed, nothing is added to the map
+		for exports := range exportCh {
+			exportsMap[exports.nodeName] = exports.quantity
+		}
 	}
 
 	return exportsMap

@@ -158,6 +158,8 @@ func TestGetNodeExportCounts(t *testing.T) {
 		return strconv.Itoa(int(nBig.Int64() + 1000))
 	}()
 	localHostIP := "127.0.0.1"
+	workerNodeOneIP := "127.0.0.2"
+	workerNodeTwoIP := "127.0.0.3"
 
 	tests := []struct {
 		name         string
@@ -177,19 +179,44 @@ func TestGetNodeExportCounts(t *testing.T) {
 		{
 			name: "Success - Test GetNodeExportCounts, valid response",
 			createServer: func(t *testing.T) {
-				server := mocks.NewMockNfsServer(gomock.NewController(t))
-				server.EXPECT().GetExports(gomock.Any(), gomock.Any()).Times(1).Return(&proto.GetExportsResponse{
+				server1 := mocks.NewMockNfsServer(gomock.NewController(t))
+				server1.EXPECT().GetExports(gomock.Any(), gomock.Any()).Times(1).Return(&proto.GetExportsResponse{
 					Exports: []string{"127.0.0.1:/export1", "127.0.0.1:/export2"},
 				}, nil)
-				createMockServer(t, localHostIP, port, server)
+				createMockServer(t, localHostIP, port, server1)
 				nodeIPAddress[localHostIP] = &NodeStatus{
 					nodeName: "myNode",
 					nodeIP:   localHostIP,
 					online:   true,
 					status:   "",
 				}
+
+				server2 := mocks.NewMockNfsServer(gomock.NewController(t))
+				server2.EXPECT().GetExports(gomock.Any(), gomock.Any()).Times(1).Return(&proto.GetExportsResponse{
+					Exports: []string{"127.0.0.2:/export1"},
+				}, nil)
+				createMockServer(t, workerNodeOneIP, port, server2)
+				nodeIPAddress[workerNodeOneIP] = &NodeStatus{
+					nodeName:   "worker-1",
+					nodeIP:     workerNodeOneIP,
+					online:     true,
+					status:     "",
+					inRecovery: true, // results should be excluded because the node is in recovery
+				}
+
+				server3 := mocks.NewMockNfsServer(gomock.NewController(t))
+				server3.EXPECT().GetExports(gomock.Any(), gomock.Any()).Times(1).Return(&proto.GetExportsResponse{
+					Exports: []string{"127.0.0.3:/export1"},
+				}, nil)
+				createMockServer(t, workerNodeTwoIP, port, server3)
+				nodeIPAddress[workerNodeTwoIP] = &NodeStatus{
+					nodeName: "worker-2",
+					nodeIP:   workerNodeTwoIP,
+					online:   true,
+					status:   "",
+				}
 			},
-			want: map[string]int{"myNode": 2},
+			want: map[string]int{"myNode": 2, "worker-2": 1},
 		},
 		{
 			name: "Success - Test GetNodeExportCounts, inRecovery",
