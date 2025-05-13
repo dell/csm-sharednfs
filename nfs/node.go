@@ -125,7 +125,9 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 
 	// Run the mount command. It grabs a lock so that only one mount command runs at a time.
 	// The mount command can time out after NfsMountTimeout.
-	err = ns.runMountCommand(ctx, req.VolumeId, cmd)
+	mountCommandContext, runMountTimeout := context.WithTimeout(ctx, NfsMountTimeout)
+	defer runMountTimeout()
+	err = ns.runMountCommand(mountCommandContext, req.VolumeId, cmd)
 	return &csi.NodeStageVolumeResponse{}, err
 
 	// type cmdresult struct {
@@ -164,8 +166,13 @@ var MountVolumeLock sync.Mutex
 
 // Mount volume attempts a mount based on the mount command, or returns failure if another mount is in progress
 func (ns *CsiNfsService) runMountCommand(ctx context.Context, volumeId string, cmd *exec.Cmd) error {
+	start := time.Now()
+	unlockMountVolume := func() {
+		MountVolumeLock.Unlock()
+		log.Infof("MountVolumeLock held %s", time.Since(start))
+	}
 	if MountVolumeLock.TryLock() {
-		defer MountVolumeLock.Unlock()
+		defer unlockMountVolume()
 		log.Infof("%s nodeStageVolume  mount mommand args: %v", volumeId, cmd.Args)
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 

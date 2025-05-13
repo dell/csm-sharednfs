@@ -190,7 +190,7 @@ func New(provisionerName string) Service {
 	nfsService = &CsiNfsService{
 		provisionerName:              provisionerName,
 		executor:                     &LocalExecutor{},
-		failureRetries:               10,
+		failureRetries:               3,
 		waitCreateNfsServiceInterval: 10 * time.Second,
 	}
 	return nfsService
@@ -272,7 +272,7 @@ func (s *CsiNfsService) BeforeServe(ctx context.Context, _ *gocsi.StoragePlugin,
 	}
 
 	MountOptions = os.Getenv("MountOptions")
-	if (MountOptions != "") {
+	if MountOptions != "" {
 		log.Infof("MountOptions: %s", MountOptions)
 	}
 

@@ -151,7 +151,7 @@ func (cs *CsiNfsService) ControllerPublishVolume(ctx context.Context,
 	}
 	resp.PublishContext = publishContext
 
-	if endpoint == nil && service == nil {
+	if endpoint == nil || service == nil {
 		// Check the Node Status before proceeding. Otherwise we need to choose another node.
 		nodeStatus := cs.GetNodeStatus(nodeIPAddress)
 		if nodeStatus == nil || !nodeStatus.online || nodeStatus.inRecovery {
@@ -300,9 +300,9 @@ func (cs *CsiNfsService) makeNfsService(ctx context.Context, namespace, name str
 	}
 
 	// Create the endpoint.
-	log.Infof("Creating endpoint")
+	log.Infof("Creating endpointslice")
 	_, err = cs.k8sclient.CreateEndpointSlice(ctx, namespace, endpointSlice)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "already exists") {
 		log.Infof("Could not create EndpointSlice %s: %s", name, err.Error())
 		return nil, err
 	}
@@ -338,7 +338,7 @@ func (cs *CsiNfsService) makeNfsService(ctx context.Context, namespace, name str
 	}
 
 	service, err = cs.k8sclient.CreateService(ctx, namespace, service)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "already exists") {
 		log.Infof("Could not create service %s: %s", name, err.Error())
 		return nil, err
 	}
