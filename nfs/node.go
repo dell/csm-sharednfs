@@ -109,6 +109,22 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 	// Mounting the volume
 	log.Infof("shared-nfs NodeStage attempting mount %s to %s", mountSource, target)
 
+	letsTimeout := 15 * time.Second
+	currentTimeout, ok := ctx.Deadline()
+	if !ok {
+		currentTimeout = time.Now().Add(letsTimeout)
+	} else {
+		if time.Until(currentTimeout) > letsTimeout {
+			currentTimeout = time.Now().Add(letsTimeout)
+		}
+	}
+
+	newCtx, newTimeout := context.WithDeadline(ctx, currentTimeout)
+	defer newTimeout()
+
+	untilTimeout, _ := newCtx.Deadline()
+
+	log.Infof("[FERNANDO] New will timeout in: %v", time.Until(untilTimeout))
 	// TODO maybe put fsType nfs4 in gofsutil
 	cmd := exec.CommandContext(ctx, "mount", "-t", "nfs4", "-o", "max_connect=2", mountSource, target) // #nosec : G204
 	log.Infof("%s NodeStage mount command args: %v", req.VolumeId, cmd.Args)
@@ -131,16 +147,16 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 	}()
 
 	select {
-	case <-ctx.Done():
+	case <-newCtx.Done():
 		log.Errorf("NodeStageVolume timed out while trying to mount volume %s. cmd: %v", req.VolumeId, cmd.Args)
-		return &csi.NodeStageVolumeResponse{}, fmt.Errorf("NodeStage Mount command timeout")
+		return nil, fmt.Errorf("NodeStage Mount command timeout")
 	case result = <-mountCh:
 		if result.err != nil {
 			if result.outb != nil {
 				log.Infof("%s NodeStage Mount command returned %s", req.VolumeId, string(result.outb))
 			}
 			log.Infof("%s NodeStage Mount failed: %v : %s", req.VolumeId, cmd.Args, result.err.Error())
-			return &csi.NodeStageVolumeResponse{}, result.err
+			return nil, result.err
 		} else {
 			log.Infof("NodeStage Mount ALL GOOD result: %v : %s", cmd.Args, string(result.outb))
 			return &csi.NodeStageVolumeResponse{}, nil
@@ -210,7 +226,7 @@ func (ns *CsiNfsService) NodePublishVolume(_ context.Context, req *csi.NodePubli
 		}
 		return resp, err
 	}
-	log.Infof("shared-nfs NodePublish umount target succeeded: %s in %s:\n%s", req.TargetPath, time.Since(start), string(out))
+	log.Infof("shared-nfs NodePublishVolume mount bind target succeeded: %s in %s:\n%s", req.TargetPath, time.Since(start), string(out))
 	return resp, nil
 }
 
