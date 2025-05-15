@@ -411,7 +411,7 @@ func TestNodeUnstageVolume(t *testing.T) {
 			},
 			getCsiNFSService: func() *CsiNfsService {
 				executor := mocks.NewMockExecutor(gomock.NewController(t))
-				executor.EXPECT().ExecuteCommand("umount", "--force", gomock.Any()).Times(1).Return([]byte{}, nil)
+				executor.EXPECT().ExecuteCommandContext(gomock.Any(), "umount", "--force", gomock.Any()).Times(1).Return([]byte{}, nil)
 				return &CsiNfsService{
 					executor: executor,
 				}
@@ -442,7 +442,7 @@ func TestNodeUnstageVolume(t *testing.T) {
 			},
 			getCsiNFSService: func() *CsiNfsService {
 				executor := mocks.NewMockExecutor(gomock.NewController(t))
-				executor.EXPECT().ExecuteCommand("umount", "--force", gomock.Any()).Times(1).Return([]byte{}, errors.New("umount error"))
+				executor.EXPECT().ExecuteCommandContext(gomock.Any(), "umount", "--force", gomock.Any()).Times(1).Return([]byte{}, errors.New("umount error"))
 				return &CsiNfsService{
 					executor: executor,
 				}
@@ -841,7 +841,7 @@ func TestCsiNfsService_NodeUnpublishVolume(t *testing.T) {
 			fields: fields{
 				executor: func() Executor {
 					executor := mocks.NewMockExecutor(gomock.NewController(t))
-					executor.EXPECT().ExecuteCommand("umount", "--force", "-l", gomock.Any()).Times(1).Return([]byte{}, errors.New("umount error"))
+					executor.EXPECT().ExecuteCommandContext(gomock.Any(), "umount", "--force", "-l", gomock.Any()).Times(1).Return([]byte{}, errors.New("umount error"))
 					return executor
 				}(),
 				failureRetries: 1,
@@ -862,7 +862,7 @@ func TestCsiNfsService_NodeUnpublishVolume(t *testing.T) {
 			fields: fields{
 				executor: func() Executor {
 					executor := mocks.NewMockExecutor(gomock.NewController(t))
-					executor.EXPECT().ExecuteCommand("umount", "--force", "-l", gomock.Any()).Times(1).Return([]byte{}, nil)
+					executor.EXPECT().ExecuteCommandContext(gomock.Any(), "umount", "--force", "-l", gomock.Any()).Times(1).Return([]byte{}, nil)
 					return executor
 				}(),
 				failureRetries: 1,

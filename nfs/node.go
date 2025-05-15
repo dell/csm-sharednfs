@@ -164,7 +164,7 @@ func (ns *CsiNfsService) isAlreadyMounted(device string) bool {
 	return false
 }
 
-func (ns *CsiNfsService) NodeUnstageVolume(_ context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
+func (ns *CsiNfsService) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
 	start := time.Now()
 	// Get lock for concurrency
 	ns.LockPV(req.VolumeId, req.VolumeId, false)
@@ -176,7 +176,7 @@ func (ns *CsiNfsService) NodeUnstageVolume(_ context.Context, req *csi.NodeUnsta
 
 	// Unmount the target directory
 	log.Infof("Attempting to unmount %s for volume %s", target, req.VolumeId)
-	out, err := ns.executor.ExecuteCommand("umount", "--force", target)
+	out, err := ns.executor.ExecuteCommandContext(ctx, "umount", "--force", target)
 	if err != nil && !strings.Contains(err.Error(), "exit status 32") {
 		log.Infof("shared-nfs NodeUnstage umount target %s: error: %s\n%s", target, err, string(out))
 		return &csi.NodeUnstageVolumeResponse{}, err
@@ -213,7 +213,7 @@ func (ns *CsiNfsService) NodePublishVolume(_ context.Context, req *csi.NodePubli
 	return resp, nil
 }
 
-func (ns *CsiNfsService) NodeUnpublishVolume(_ context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
+func (ns *CsiNfsService) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 	start := time.Now()
 	target := req.TargetPath
 	// Get lock for concurrency
@@ -228,7 +228,7 @@ func (ns *CsiNfsService) NodeUnpublishVolume(_ context.Context, req *csi.NodeUnp
 	// --force is used in case we lose connection to the nfs client,
 	// -l (lazy) is used to defer dir cleanup and allow unmounting now, ignoring if the target is busy.
 	// TODO: use ExecuteCommandContext to cancel the request if the context times out
-	out, err := ns.executor.ExecuteCommand("umount", "--force", "-l", target)
+	out, err := ns.executor.ExecuteCommandContext(ctx, "umount", "--force", "-l", target)
 	if err != nil && !strings.Contains(err.Error(), "exit status 32") {
 		log.Infof("shared-nfs NodeUnpublish umount target %s: error: %s\n%s", target, err, string(out))
 		return &csi.NodeUnpublishVolumeResponse{}, err
