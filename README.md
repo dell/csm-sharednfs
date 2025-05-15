@@ -33,8 +33,6 @@ Note: This project can be compiled with CSI Powerstore driver only. Other platfo
 * [Security](https://github.com/dell/csm/blob/main/docs/SECURITY.md)
 * [Building](#building)
 * [Prerequisites](#prerequisites)
-* [Driver Installation](#driver-installation)
-* [Using Driver](#using-driver)
 * [Documentation](#documentation)
 
 ## Support
@@ -50,12 +48,6 @@ To run unit tests, execute `make unit-test`.
 
 NFS server services are required to be active and running on the nodes prior to using this module. 
 Please refer to respective host platform documentation on installing nfs packages and how to enable nfs services. 
-
-## Driver Installation
-Please consult the [Installation Guide](https://dell.github.io/csm-docs/docs/deployment/)
-
-## Using Driver
-Please refer to the section `Testing Drivers` in the [Documentation](https://dell.github.io/csm-docs/docs/csidriver/test/) for more info.
 
 ## Documentation
 For more detailed information on the driver, please refer to [Container Storage Modules documentation](https://dell.github.io/csm-docs/).
