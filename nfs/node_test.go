@@ -208,7 +208,11 @@ func TestNodeStageVolume(t *testing.T) {
 					},
 					StagingTargetPath: "path/to/stage",
 				},
-				ctx: context.Background(),
+				ctx: func() context.Context {
+					ctx, ctxCancel := context.WithTimeout(context.Background(), 0*time.Second)
+					ctxCancel() // we want to trigger a timeout failure, so we'll cancel the context now
+					return ctx
+				}(),
 			},
 			getCsiNFSService: func() *CsiNfsService {
 				k8sService := &v1.Service{
@@ -328,7 +332,7 @@ func TestNodeStageVolume(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "volume is already mounted",
+			name: "staging target path is empty",
 			args: args{
 				req: &csi.NodeStageVolumeRequest{
 					VolumeId: sharedNFSVolumeID,

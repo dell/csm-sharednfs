@@ -109,23 +109,6 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 	// Mounting the volume
 	log.Infof("shared-nfs NodeStage attempting mount %s to %s", mountSource, target)
 
-	mountDeadline, ok := ctx.Deadline()
-	if !ok {
-		mountDeadline = time.Now().Add(nodeStageTimeout)
-	} else {
-		// adjust deadline if doing so would not exceed the parent context deadline
-		if time.Until(mountDeadline) > nodeStageTimeout {
-			// set deadline to 15s from now
-			mountDeadline = time.Now().Add(nodeStageTimeout)
-		}
-	}
-
-	// TODO: further investigate the efficacy of this timeout
-	// Some filesystems are slow to mount and may benefit from a longer timeout,
-	// but other tests suggest a shorter timeout is better.
-	mountCtx, mountCtxCancel := context.WithDeadline(ctx, mountDeadline)
-	defer mountCtxCancel()
-
 	cmd := exec.CommandContext(ctx, "mount", "-t", "nfs4", "-o", "max_connect=2", mountSource, target) // #nosec : G204
 	log.Infof("%s NodeStage mount command args: %v", req.VolumeId, cmd.Args)
 
@@ -147,7 +130,7 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 	}()
 
 	select {
-	case <-mountCtx.Done():
+	case <-ctx.Done():
 		log.Errorf("NodeStageVolume timed out while trying to mount volume %s. cmd: %v", req.VolumeId, cmd.Args)
 		return nil, fmt.Errorf("NodeStage Mount command timeout")
 	case result = <-mountCh:
