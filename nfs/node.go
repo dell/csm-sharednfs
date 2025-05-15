@@ -71,7 +71,6 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 	log.Infof("shared-nfs NodeStageVolume called volumeID: %s, StagingPath: %s", req.VolumeId, req.StagingTargetPath)
 
 	// First, locate the service
-	// TODO are we using the vxflexos namespace?
 	namespace := DriverNamespace
 	service, err := ns.k8sclient.GetService(ctx, namespace, serviceName)
 	if err != nil {
@@ -127,7 +126,6 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 	mountCtx, mountCtxCancel := context.WithDeadline(ctx, mountDeadline)
 	defer mountCtxCancel()
 
-	// TODO maybe put fsType nfs4 in gofsutil
 	cmd := exec.CommandContext(ctx, "mount", "-t", "nfs4", "-o", "max_connect=2", mountSource, target) // #nosec : G204
 	log.Infof("%s NodeStage mount command args: %v", req.VolumeId, cmd.Args)
 

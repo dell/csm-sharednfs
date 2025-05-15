@@ -47,7 +47,6 @@ type nfsServer struct {
 	// Embed the unimplemented server
 }
 
-// TODO: make these externally configurable
 const (
 	RootUID           = 0
 	nfsGroupID        = 100
@@ -85,7 +84,6 @@ func startNfsServiceServer(ipAddress, port string, listenFunc ListenFunc, serveF
 }
 
 func getNfsClient(ipaddress, port string) (proto.NfsClient, error) {
-	// TODO check if this is still applicable: add support for ipv6, add support for closing the client
 	client, err := grpc.NewClient(ipaddress+":"+port, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
 		log.Errorf("Could not connect to nfsService %s:%s", ipaddress, port)
@@ -96,7 +94,6 @@ func getNfsClient(ipaddress, port string) (proto.NfsClient, error) {
 	return nfsClient, nil
 }
 
-// TODO: Add cleanup
 func deleteNfsClient(_ string) {}
 
 var nfsPVLock sync.Map
@@ -129,17 +126,10 @@ func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsV
 
 	// Check for idempotent request
 	log.Infof("ExportNfsVolume checking for idempotent request: %s", req.VolumeId)
+
 	stagingPath := NfsExportDirectory + "/" + VolumeIDToServiceName(req.VolumeId)
 	statResult, _ := opSys.Stat(stagingPath)
-	// if err != nil && !errors.Is(err, os.ErrNotExist) {
-	// 	return nil, err
-	// }
-
 	exists, _ := CheckExport(stagingPath + "/")
-	// if err != nil {
-	// 	return nil, err
-	// }
-
 	if statResult != nil && exists {
 		log.Infof("ExportNfsVolume %s already exported", req.VolumeId)
 		if resp.ExportNfsContext == nil {
@@ -208,7 +198,7 @@ func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsV
 	// Add entry in /etc/exports
 	options := "(rw,no_subtree_check,no_root_squash)"
 	optionsString := nfsService.podCIDR + options
-	// Add the link-local overlay network for OCP. TODO: add conditionally?
+	// Add the link-local overlay network for OCP.
 	optionsString = optionsString + " 169.254.0.0/17" + options
 	optionsString = optionsString + " 127.0.0.1/32" + options
 
