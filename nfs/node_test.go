@@ -19,6 +19,7 @@ package nfs
 import (
 	"context"
 	"errors"
+	"os/exec"
 	"reflect"
 	"testing"
 	"time"
@@ -42,6 +43,15 @@ var (
 )
 
 func TestNodeStageVolume(t *testing.T) {
+	nodeStageRetryWaitDefault := nodeStageRetryWait
+	nodeStageRetryWait = 0 * time.Second
+	nodeStageTimeoutDefault := nodeStageTimeout
+	nodeStageTimeout = 100 * time.Millisecond
+	defer func() {
+		nodeStageRetryWait = nodeStageRetryWaitDefault
+		nodeStageTimeout = nodeStageTimeoutDefault
+	}()
+
 	type args struct {
 		ctx context.Context
 		req *csi.NodeStageVolumeRequest
@@ -186,6 +196,176 @@ func TestNodeStageVolume(t *testing.T) {
 				}
 			},
 			want:    nil,
+			wantErr: true,
+		},
+		{
+			name: "retry and error",
+			args: args{
+				req: &csi.NodeStageVolumeRequest{
+					VolumeId: "vol1",
+					VolumeCapability: &csi.VolumeCapability{
+						AccessMode: &csi.VolumeCapability_AccessMode{Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER},
+					},
+					StagingTargetPath: "path/to/stage",
+				},
+				ctx: context.Background(),
+			},
+			getCsiNFSService: func() *CsiNfsService {
+				k8sService := &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "",
+						Name:      "vol1",
+					},
+					Spec: v1.ServiceSpec{
+						ClusterIP: "1.2.3.4",
+					},
+				}
+
+				clientset := fake.NewSimpleClientset(k8sService)
+
+				client := &k8s.Client{
+					Clientset: clientset,
+				}
+
+				executor := mocks.NewMockExecutor(gomock.NewController(t))
+				executor.EXPECT().ExecuteCommand("mount").Times(1).Return([]byte(string("")), nil)
+				executor.EXPECT().ExecuteCommand("mkdir", "-p", "path/to/stage").Times(1).Return([]byte(string("")), nil)
+				executor.EXPECT().ExecuteCommand("chmod", "02777", "path/to/stage").Times(1).Return([]byte(string("")), nil)
+				executor.EXPECT().GetCombinedOutput(gomock.Any()).Times(1).Do(
+					func(_ *exec.Cmd) {
+						time.Sleep(1 * time.Second)
+					},
+				)
+
+				return &CsiNfsService{
+					failureRetries: 1,
+					k8sclient:      client,
+					executor:       executor,
+				}
+			},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name: "cluster IP is empty",
+			args: args{
+				req: &csi.NodeStageVolumeRequest{
+					VolumeId: "vol1",
+					VolumeCapability: &csi.VolumeCapability{
+						AccessMode: &csi.VolumeCapability_AccessMode{Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER},
+					},
+					StagingTargetPath: "path/to/stage",
+				},
+				ctx: context.Background(),
+			},
+			getCsiNFSService: func() *CsiNfsService {
+				k8sService := &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "",
+						Name:      "vol1",
+					},
+					Spec: v1.ServiceSpec{
+						ClusterIP: "",
+					},
+				}
+
+				clientset := fake.NewSimpleClientset(k8sService)
+
+				client := &k8s.Client{
+					Clientset: clientset,
+				}
+				executor := mocks.NewMockExecutor(gomock.NewController(t))
+
+				return &CsiNfsService{
+					failureRetries: 1,
+					k8sclient:      client,
+					executor:       executor,
+				}
+			},
+			want:    &csi.NodeStageVolumeResponse{},
+			wantErr: true,
+		},
+		{
+			name: "volume is already mounted",
+			args: args{
+				req: &csi.NodeStageVolumeRequest{
+					VolumeId: sharedNFSVolumeID,
+					VolumeCapability: &csi.VolumeCapability{
+						AccessMode: &csi.VolumeCapability_AccessMode{Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER},
+					},
+					StagingTargetPath: "path/to/stage",
+				},
+				ctx: context.Background(),
+			},
+			getCsiNFSService: func() *CsiNfsService {
+				k8sService := &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "",
+						Name:      VolumeIDToServiceName(sharedNFSVolumeID),
+					},
+					Spec: v1.ServiceSpec{
+						ClusterIP: "1.2.3.4",
+					},
+				}
+
+				clientset := fake.NewSimpleClientset(k8sService)
+
+				client := &k8s.Client{
+					Clientset: clientset,
+				}
+				executor := mocks.NewMockExecutor(gomock.NewController(t))
+				executor.EXPECT().ExecuteCommand("mount").Times(1).Return([]byte(
+					string(k8sService.Spec.ClusterIP+":"+NfsExportDirectory+"/"+VolumeIDToServiceName(sharedNFSVolumeID))),
+					nil)
+
+				return &CsiNfsService{
+					failureRetries: 1,
+					k8sclient:      client,
+					executor:       executor,
+				}
+			},
+			want:    &csi.NodeStageVolumeResponse{},
+			wantErr: false,
+		},
+		{
+			name: "volume is already mounted",
+			args: args{
+				req: &csi.NodeStageVolumeRequest{
+					VolumeId: sharedNFSVolumeID,
+					VolumeCapability: &csi.VolumeCapability{
+						AccessMode: &csi.VolumeCapability_AccessMode{Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER},
+					},
+					// staging target path is empty
+					StagingTargetPath: "",
+				},
+				ctx: context.Background(),
+			},
+			getCsiNFSService: func() *CsiNfsService {
+				k8sService := &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "",
+						Name:      VolumeIDToServiceName(sharedNFSVolumeID),
+					},
+					Spec: v1.ServiceSpec{
+						ClusterIP: "1.2.3.4",
+					},
+				}
+
+				clientset := fake.NewSimpleClientset(k8sService)
+
+				client := &k8s.Client{
+					Clientset: clientset,
+				}
+				executor := mocks.NewMockExecutor(gomock.NewController(t))
+				executor.EXPECT().ExecuteCommand("mount").Times(1).Return([]byte{}, nil)
+
+				return &CsiNfsService{
+					failureRetries: 1,
+					k8sclient:      client,
+					executor:       executor,
+				}
+			},
+			want:    &csi.NodeStageVolumeResponse{},
 			wantErr: true,
 		},
 	}
@@ -722,6 +902,100 @@ func TestCsiNfsService_NodeUnpublishVolume(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("CsiNfsService.NodeUnpublishVolume() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCsiNfsService_isAlreadyMounted(t *testing.T) {
+	type fields struct {
+		vcsi                         Service
+		md                           Service
+		provisionerName              string
+		mode                         string
+		nodeID                       string
+		nodeIPAddress                string
+		podCIDR                      string
+		nodeName                     string
+		failureRetries               int
+		k8sclient                    *k8s.Client
+		executor                     Executor
+		waitCreateNfsServiceInterval time.Duration
+		nfsServerPort                string
+		nfsClientServicePort         string
+	}
+	type args struct {
+		device string
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+		want   bool
+	}{
+		{
+			name: "device is not already mounted",
+			fields: fields{
+				executor: func() Executor {
+					executor := mocks.NewMockExecutor(gomock.NewController(t))
+					executor.EXPECT().ExecuteCommand("mount").Times(1).Return([]byte{}, nil)
+					return executor
+				}(),
+			},
+			args: args{
+				device: sharedNFSVolumeID + "-dev",
+			},
+			want: false,
+		},
+		{
+			name: "checking the mount fails",
+			fields: fields{
+				executor: func() Executor {
+					executor := mocks.NewMockExecutor(gomock.NewController(t))
+					executor.EXPECT().ExecuteCommand("mount").Times(1).Return([]byte{}, errors.New("failed to list mounts"))
+					return executor
+				}(),
+			},
+			args: args{
+				device: sharedNFSVolumeID + "-dev",
+			},
+			want: false,
+		},
+		{
+			name: "mount already exists",
+			fields: fields{
+				executor: func() Executor {
+					executor := mocks.NewMockExecutor(gomock.NewController(t))
+					executor.EXPECT().ExecuteCommand("mount").Times(1).Return([]byte(sharedNFSVolumeID+"-dev"), nil)
+					return executor
+				}(),
+			},
+			args: args{
+				device: sharedNFSVolumeID + "-dev",
+			},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ns := &CsiNfsService{
+				vcsi:                         tt.fields.vcsi,
+				md:                           tt.fields.md,
+				provisionerName:              tt.fields.provisionerName,
+				mode:                         tt.fields.mode,
+				nodeID:                       tt.fields.nodeID,
+				nodeIPAddress:                tt.fields.nodeIPAddress,
+				podCIDR:                      tt.fields.podCIDR,
+				nodeName:                     tt.fields.nodeName,
+				failureRetries:               tt.fields.failureRetries,
+				k8sclient:                    tt.fields.k8sclient,
+				executor:                     tt.fields.executor,
+				waitCreateNfsServiceInterval: tt.fields.waitCreateNfsServiceInterval,
+				nfsServerPort:                tt.fields.nfsServerPort,
+				nfsClientServicePort:         tt.fields.nfsClientServicePort,
+			}
+			if got := ns.isAlreadyMounted(tt.args.device); got != tt.want {
+				t.Errorf("CsiNfsService.isAlreadyMounted() = %v, want %v", got, tt.want)
 			}
 		})
 	}
