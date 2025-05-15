@@ -499,6 +499,11 @@ func TestGetNodeStatus(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// clean nodeIPAddress before each test
+			defer func() {
+				nodeIPAddress = make(map[string]*NodeStatus)
+			}()
+
 			status := tt.nfsServer.GetNodeStatus(tt.nodeIP)
 
 			if !reflect.DeepEqual(status, tt.wantStatus) {

@@ -30,7 +30,8 @@ import (
 
 var (
 	defaultTimeout       = 10 * time.Second
-	nodeStageTimeout     = defaultTimeout
+	nodeStageRetryWait   = defaultTimeout
+	nodeStageTimeout     = 15 * time.Second
 	nodeUnpublishTimeout = defaultTimeout
 )
 
@@ -53,7 +54,7 @@ func (ns *CsiNfsService) NodeStageVolume(ctx context.Context, req *csi.NodeStage
 			return resp, err
 		}
 		log.Infof("NodeStageVolume %s retries %d error %s", req.VolumeId, retries, err)
-		time.Sleep(nodeStageTimeout)
+		time.Sleep(nodeStageRetryWait)
 	}
 	return resp, err
 }
@@ -109,22 +110,23 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 	// Mounting the volume
 	log.Infof("shared-nfs NodeStage attempting mount %s to %s", mountSource, target)
 
-	letsTimeout := 15 * time.Second
-	currentTimeout, ok := ctx.Deadline()
+	mountDeadline, ok := ctx.Deadline()
 	if !ok {
-		currentTimeout = time.Now().Add(letsTimeout)
+		mountDeadline = time.Now().Add(nodeStageTimeout)
 	} else {
-		if time.Until(currentTimeout) > letsTimeout {
-			currentTimeout = time.Now().Add(letsTimeout)
+		// adjust deadline if doing so would not exceed the parent context deadline
+		if time.Until(mountDeadline) > nodeStageTimeout {
+			// set deadline to 15s from now
+			mountDeadline = time.Now().Add(nodeStageTimeout)
 		}
 	}
 
-	newCtx, newTimeout := context.WithDeadline(ctx, currentTimeout)
-	defer newTimeout()
+	// TODO: further investigate the efficacy of this timeout
+	// Some filesystems are slow to mount and may benefit from a longer timeout,
+	// but other tests suggest a shorter timeout is better.
+	mountCtx, mountCtxCancel := context.WithDeadline(ctx, mountDeadline)
+	defer mountCtxCancel()
 
-	untilTimeout, _ := newCtx.Deadline()
-
-	log.Infof("[FERNANDO] New will timeout in: %v", time.Until(untilTimeout))
 	// TODO maybe put fsType nfs4 in gofsutil
 	cmd := exec.CommandContext(ctx, "mount", "-t", "nfs4", "-o", "max_connect=2", mountSource, target) // #nosec : G204
 	log.Infof("%s NodeStage mount command args: %v", req.VolumeId, cmd.Args)
@@ -147,7 +149,7 @@ func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStage
 	}()
 
 	select {
-	case <-newCtx.Done():
+	case <-mountCtx.Done():
 		log.Errorf("NodeStageVolume timed out while trying to mount volume %s. cmd: %v", req.VolumeId, cmd.Args)
 		return nil, fmt.Errorf("NodeStage Mount command timeout")
 	case result = <-mountCh:
@@ -242,6 +244,8 @@ func (ns *CsiNfsService) NodeUnpublishVolume(ctx context.Context, req *csi.NodeU
 
 	// Unmount the target directory
 	log.Infof("Attempting to unmount %s for volume %s", target, req.VolumeId)
+	// --force is used in case we lose connection to the nfs client,
+	// -l (lazy) is used to defer dir cleanup and allow unmounting now, ignoring if the target is busy.
 	out, err := ns.executor.ExecuteCommand("umount", "--force", "-l", target)
 	if err != nil && !strings.Contains(err.Error(), "exit status 32") {
 		log.Infof("shared-nfs NodeUnpublish umount target %s: error: %s\n%s", target, err, string(out))

@@ -185,7 +185,7 @@ func TestNodeStageVolume(t *testing.T) {
 					executor:       executor,
 				}
 			},
-			want:    &csi.NodeStageVolumeResponse{},
+			want:    nil,
 			wantErr: true,
 		},
 	}
@@ -198,7 +198,7 @@ func TestNodeStageVolume(t *testing.T) {
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("NodeStageVolume() = %v, want %v", got, tt.want)
+				t.Errorf("NodeStageVolume() response = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -657,8 +657,7 @@ func TestCsiNfsService_NodeUnpublishVolume(t *testing.T) {
 			fields: fields{
 				executor: func() Executor {
 					executor := mocks.NewMockExecutor(gomock.NewController(t))
-					executor.EXPECT().ExecuteCommandContext(gomock.Any(), "sync", "-f", gomock.Any()).Times(1).Return([]byte("sync success"), nil)
-					executor.EXPECT().ExecuteCommand("umount", "--force", gomock.Any()).Times(1).Return([]byte{}, errors.New("umount error"))
+					executor.EXPECT().ExecuteCommand("umount", "--force", "-l", gomock.Any()).Times(1).Return([]byte{}, errors.New("umount error"))
 					return executor
 				}(),
 				failureRetries: 1,
@@ -675,43 +674,11 @@ func TestCsiNfsService_NodeUnpublishVolume(t *testing.T) {
 			errMsg:  "umount error",
 		},
 		{
-			name: "unmount times out",
-			fields: fields{
-				executor: func() Executor {
-					executor := mocks.NewMockExecutor(gomock.NewController(t))
-					// do nothing for longer than the context timeout
-					executor.EXPECT().ExecuteCommandContext(gomock.Any(), "sync", "-f", gomock.Any()).Times(1).Do(
-						func(_ context.Context, _ string, _ ...string) {
-							time.Sleep(5 * time.Second)
-						},
-					)
-					executor.EXPECT().ExecuteCommand("umount", "--force", gomock.Any()).Times(1).Return([]byte{}, nil)
-					return executor
-				}(),
-				failureRetries: 1,
-			},
-			args: args{
-				ctx: func() context.Context {
-					ctx, cancelFn := context.WithCancel(context.Background())
-					// cancel the context immediately to trigger the ctx.Done channel
-					defer cancelFn()
-					return ctx
-				}(),
-				req: &csi.NodeUnpublishVolumeRequest{
-					VolumeId:   sharedNFSVolumeID,
-					TargetPath: "path/to/target",
-				},
-			},
-			want:    &csi.NodeUnpublishVolumeResponse{},
-			wantErr: false,
-		},
-		{
 			name: "success",
 			fields: fields{
 				executor: func() Executor {
 					executor := mocks.NewMockExecutor(gomock.NewController(t))
-					executor.EXPECT().ExecuteCommandContext(gomock.Any(), "sync", "-f", gomock.Any()).Times(1).Return([]byte("sync success"), nil)
-					executor.EXPECT().ExecuteCommand("umount", "--force", gomock.Any()).Times(1).Return([]byte{}, nil)
+					executor.EXPECT().ExecuteCommand("umount", "--force", "-l", gomock.Any()).Times(1).Return([]byte{}, nil)
 					return executor
 				}(),
 				failureRetries: 1,
