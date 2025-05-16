@@ -11,6 +11,7 @@ package mocks
 
 import (
 	context "context"
+	exec "os/exec"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
@@ -78,4 +79,19 @@ func (mr *MockExecutorMockRecorder) ExecuteCommandContext(context, name any, arg
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{context, name}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecuteCommandContext", reflect.TypeOf((*MockExecutor)(nil).ExecuteCommandContext), varargs...)
+}
+
+// GetCombinedOutput mocks base method.
+func (m *MockExecutor) GetCombinedOutput(cmd *exec.Cmd) ([]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCombinedOutput", cmd)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCombinedOutput indicates an expected call of GetCombinedOutput.
+func (mr *MockExecutorMockRecorder) GetCombinedOutput(cmd any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCombinedOutput", reflect.TypeOf((*MockExecutor)(nil).GetCombinedOutput), cmd)
 }

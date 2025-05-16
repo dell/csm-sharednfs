@@ -25,6 +25,7 @@ import (
 type Executor interface {
 	ExecuteCommand(name string, args ...string) ([]byte, error)
 	ExecuteCommandContext(context context.Context, name string, args ...string) ([]byte, error)
+	GetCombinedOutput(cmd *exec.Cmd) ([]byte, error)
 }
 
 type LocalExecutor struct{}
@@ -39,4 +40,8 @@ func (l *LocalExecutor) ExecuteCommandContext(context context.Context, name stri
 
 func (l *LocalExecutor) Run(name string, args ...string) error {
 	return exec.Command(name, args...).Run()
+}
+
+func (l *LocalExecutor) GetCombinedOutput(cmd *exec.Cmd) ([]byte, error) {
+	return cmd.CombinedOutput()
 }
