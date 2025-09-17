@@ -47,7 +47,6 @@ type nfsServer struct {
 	// Embed the unimplemented server
 }
 
-// TODO: make these externally configurable
 const (
 	RootUID           = 0
 	nfsGroupID        = 100
@@ -85,7 +84,6 @@ func startNfsServiceServer(ipAddress, port string, listenFunc ListenFunc, serveF
 }
 
 func getNfsClient(ipaddress, port string) (proto.NfsClient, error) {
-	// TODO check if this is still applicable: add support for ipv6, add support for closing the client
 	client, err := grpc.NewClient(ipaddress+":"+port, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
 		log.Errorf("Could not connect to nfsService %s:%s", ipaddress, port)
@@ -96,7 +94,6 @@ func getNfsClient(ipaddress, port string) (proto.NfsClient, error) {
 	return nfsClient, nil
 }
 
-// TODO: Add cleanup
 func deleteNfsClient(_ string) {}
 
 var nfsPVLock sync.Map
@@ -120,20 +117,62 @@ func (nfs *nfsServer) nfsUnlockPV(requestID string) {
 // The trick is in finding the volume. You actually need some array specific code to do that...
 func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsVolumeRequest) (*proto.ExportNfsVolumeResponse, error) {
 	resp := &proto.ExportNfsVolumeResponse{}
+	resp.VolumeId = req.VolumeId
 	start := time.Now()
 	defer finish(ctx, "ExportNfsVolume", req.VolumeId, start)
 	log.Infof("Received ExportNfsVolume request %s: %+v", req.VolumeId, req)
 	nfs.nfsLockPV(req.VolumeId)
 	defer nfs.nfsUnlockPV(req.VolumeId)
-	path, err := nfsService.vcsi.MountVolume(ctx, req.VolumeId, "", NfsExportDirectory, req.ExportNfsContext)
+
+	// Check for idempotent request
+	log.Infof("ExportNfsVolume checking for idempotent request: %s", req.VolumeId)
+
+	stagingPath := NfsExportDirectory + "/" + VolumeIDToServiceName(req.VolumeId)
+	statResult, _ := opSys.Stat(stagingPath)
+	exists, _ := CheckExport(stagingPath + "/")
+	if statResult != nil && exists {
+		log.Infof("ExportNfsVolume %s already exported", req.VolumeId)
+		if resp.ExportNfsContext == nil {
+			resp.ExportNfsContext = make(map[string]string)
+		}
+
+		resp.ExportNfsContext["idenpotent"] = "true"
+		log.Infof("ExportNfsVolume idempotent request volume %s", req.VolumeId)
+
+		return resp, nil
+	}
+
+	path := ""
+	type mountResponse struct {
+		path string
+		err  error
+	}
+	mountCh := make(chan mountResponse)
+	// run export as an async request so we can monitor the parent context
+	// and continue execution if the context times out
+	go func() {
+		log.Infof("ExportNfsVolume calling MountVolume for volume %s", req.VolumeId)
+		path, err := nfsService.vcsi.MountVolume(ctx, req.VolumeId, "", NfsExportDirectory, req.ExportNfsContext)
+		mountCh <- mountResponse{path, err}
+	}()
+
+	select {
+	case <-ctx.Done():
+		log.Errorf("MountVolume request timed out for volume %s", req.VolumeId)
+		return nil, ctx.Err()
+	case mount := <-mountCh:
+		if mount.err != nil {
+			log.Errorf("MountVolume request failed for volume %s", req.VolumeId)
+			return resp, mount.err
+		}
+		path = mount.path
+	}
+
 	resp.VolumeId = req.VolumeId
 	context := req.ExportNfsContext
 	context["MountPath"] = path
-	if err != nil {
-		return resp, err
-	}
 	log.Infof("Calling Chown %s %d %d", path, RootUID, nfsGroupID)
-	err = opSys.Chown(path, RootUID, nfsGroupID)
+	err := opSys.Chown(path, RootUID, nfsGroupID)
 	if err != nil {
 		log.Errorf("failed chown output: %s", err)
 		return resp, err
@@ -147,15 +186,8 @@ func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsV
 		return resp, err
 	}
 
-	log.Infof("Calling chroot chmod %s %o", path, NfsFileMode)
-	out, err := GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "chmod", NfsFileModeString, path)
-	if err != nil {
-		log.Errorf("failed chroot chmod output: %s %s", err, string(out))
-		return resp, err
-	}
-
 	// Read the directory entry for the path (debug)
-	out, err = GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "ls", "-ld", path)
+	out, err := GetLocalExecutor().ExecuteCommand("chroot", "/noderoot", "ls", "-ld", path)
 	if err != nil {
 		log.Errorf("failed chroot output: %s %s", err, string(out))
 		return resp, err
@@ -166,8 +198,9 @@ func (nfs *nfsServer) ExportNfsVolume(ctx context.Context, req *proto.ExportNfsV
 	// Add entry in /etc/exports
 	options := "(rw,no_subtree_check,no_root_squash)"
 	optionsString := nfsService.podCIDR + options
-	// Add the link-local overlay network for OCP. TODO: add conditionally?
+	// Add the link-local overlay network for OCP.
 	optionsString = optionsString + " 169.254.0.0/17" + options
+	optionsString = optionsString + " 127.0.0.1/32" + options
 
 	log.Infof("ExportNfsVolume Calling AddExport %s/ %s", path, optionsString)
 	generation, err = AddExport(path+"/", optionsString)

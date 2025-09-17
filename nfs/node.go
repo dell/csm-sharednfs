@@ -19,85 +19,85 @@ package nfs
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	log "github.com/sirupsen/logrus"
 )
 
-var nodePublishTimeout = 10 * time.Second
+var (
+	defaultTimeout       = 10 * time.Second
+	nodeStageRetryWait   = defaultTimeout
+	nodeStageTimeout     = 15 * time.Second
+	nodeUnpublishTimeout = defaultTimeout
+)
 
-func (ns *CsiNfsService) NodeStageVolume(_ context.Context, _ *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
-	// Implement your logic here
-	// Add an nfs mount of the volume to the staging directory
-	return &csi.NodeStageVolumeResponse{}, nil
-}
-
-func (ns *CsiNfsService) NodeUnstageVolume(_ context.Context, _ *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
-	// Implement your logic here
-	// Ensure there are no remaining mounts using the staging directory.
-	// Remove the NFS mount from the staging directory.
-	return &csi.NodeUnstageVolumeResponse{}, nil
-}
-
-func (ns *CsiNfsService) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
-	// Run the nodePublishVolume in a retry loop. This is necessary because after a server failover
-	// it make take time for the new server to come online and begin serving the volume. This can form a
-	// race condition between the new server coming up exporting the volume
-	// and existing pods (on a restarted node) trying to reconnect.
-	var resp *csi.NodePublishVolumeResponse
+func (ns *CsiNfsService) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
+	ns.LockPV(req.VolumeId, req.VolumeId, false)
+	defer ns.UnlockPV(req.VolumeId)
+	resp := &csi.NodeStageVolumeResponse{}
 	var err error
 	retries := 0
 	startTime := time.Now()
 	defer func() {
-		log.Infof("NodePublishVolume %s completed in %s %d retries error: %v", req.VolumeId, time.Since(startTime), retries, err)
+		log.Infof("NodeStageVolume %s completed in %s %d retries error: %v", req.VolumeId, time.Since(startTime), retries, err)
 	}()
 	for retries := range ns.failureRetries {
-		resp, err = ns.nodePublishVolume(ctx, req)
+		resp, err = ns.nodeStageVolume(ctx, req)
 		if err == nil {
 			return resp, err
 		}
-		log.Infof("NodePublishVolume %s retries %d error %s", req.VolumeId, retries, err)
-		time.Sleep(nodePublishTimeout)
+		if !strings.Contains(err.Error(), "timeout") {
+			return resp, err
+		}
+		log.Infof("NodeStageVolume %s retries %d error %s", req.VolumeId, retries, err)
+		time.Sleep(nodeStageRetryWait)
 	}
 	return resp, err
 }
 
-func (ns *CsiNfsService) nodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
-	resp := &csi.NodePublishVolumeResponse{}
+var mountMutex = sync.Mutex{}
+
+func (ns *CsiNfsService) nodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
+	resp := &csi.NodeStageVolumeResponse{}
 	// Implement your logic here
 	// Add a bind mount from the staging directory to the pod's target directory.
 	// Get lock for concurrency
 	serviceName := VolumeIDToServiceName(req.VolumeId)
-	ns.LockPV(req.VolumeId, req.VolumeId, false)
-	defer ns.UnlockPV(req.VolumeId)
 
-	log.Infof("shared-nfs NodePublishVolume called volumeID %s", req.VolumeId)
+	log.Infof("shared-nfs NodeStageVolume called volumeID: %s, StagingPath: %s", req.VolumeId, req.StagingTargetPath)
 
 	// First, locate the service
-	// TODO are we using the vxflexos namespace?
 	namespace := DriverNamespace
 	service, err := ns.k8sclient.GetService(ctx, namespace, serviceName)
 	if err != nil {
-		return resp, fmt.Errorf("err %s/%s not found: %+v", namespace, serviceName, service)
+		return resp, fmt.Errorf("could not get service Namespace: %s, ServiceName: %s, Service: %+v", namespace, serviceName, service)
 	}
 	if service.Spec.ClusterIP == "" {
-		return resp, fmt.Errorf("NodePublishVolume %s failed, service IP empty", req.VolumeId)
+		return resp, fmt.Errorf("NodeStageVolume %s failed, service IP empty", req.VolumeId)
+	}
+	// Check if already mounted
+	mountSource := service.Spec.ClusterIP + ":" + NfsExportDirectory + "/" + serviceName
+	if ns.isAlreadyMounted(mountSource) {
+		log.Infof("mountSource %s is already mounted- not remounting", mountSource)
+		return resp, nil
 	}
 
-	if req.TargetPath == "" {
-		return resp, fmt.Errorf("NodePublishVolume %s failed, TargetPath empty", req.VolumeId)
+	if req.StagingTargetPath == "" {
+		return resp, fmt.Errorf("NodeStageVolume %s failed, TargetPath empty", req.VolumeId)
 	}
-	target := req.TargetPath
+	target := req.StagingTargetPath
 	// Make sure the target exists
-	log.Infof("Making directory for target path %s", target)
+	log.Infof("Making directory for stagingtarget path %s", target)
 	output, err := ns.executor.ExecuteCommand("mkdir", "-p", target)
 	if err != nil {
-		log.Errorf("Target path %s not created: %s ... proceeding anyway: %s \n", target, err, string(output))
+		log.Errorf("StagingTarget path %s not created: %s ... proceeding anyway: %s \n", target, err, string(output))
 		// Unmount the target directory
 		out, err := ns.executor.ExecuteCommand("umount", target)
-		log.Infof("shared-nfs NodeUnpublish %s umount target error: %v:\n%s", target, err, string(out))
+		log.Infof("shared-nfs NodeStageVolume %s umount target error: %v:\n%s", target, err, string(out))
 	}
 
 	log.Info("Changing permissions of target path")
@@ -107,22 +107,113 @@ func (ns *CsiNfsService) nodePublishVolume(ctx context.Context, req *csi.NodePub
 	}
 
 	// Mounting the volume
-	mountSource := service.Spec.ClusterIP + ":" + NfsExportDirectory + "/" + serviceName
-	log.Infof("shared-nfs NodePublish attempting mount %s to %s", mountSource, target)
-	mountContext, mountCancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer mountCancel()
-	output, err = ns.executor.ExecuteCommandContext(mountContext, "mount", "-w", "-t", "nfs4", mountSource, target)
-	// TODO maybe put fsType nfs4 in gofsutil
-	if err != nil {
-		log.Errorf("shared-nfs NodePublish mount %s failed %s", mountSource, err)
-		log.Infof("mount command output:\n%s", string(output))
-		return resp, err
+	log.Infof("shared-nfs NodeStage attempting mount %s to %s", mountSource, target)
+
+	cmd := exec.CommandContext(ctx, "mount", "-t", "nfs4", "-o", "max_connect=2", mountSource, target) // #nosec : G204
+	log.Infof("%s NodeStage mount command args: %v", req.VolumeId, cmd.Args)
+
+	type cmdResult struct {
+		outb []byte
+		err  error
 	}
-	log.Infof("shared-nfs NodePublish %s target %s ALL GOOD", req.VolumeId, req.TargetPath)
-	return &csi.NodePublishVolumeResponse{}, nil
+	var result cmdResult
+	mountCh := make(chan cmdResult, 1)
+
+	// get a lock on mount cmd
+	mountMutex.Lock()
+	defer mountMutex.Unlock()
+
+	go func() {
+		log.Infof("ExportNfsVolume calling mount for volume %s", req.VolumeId)
+		outb, err := ns.executor.GetCombinedOutput(cmd)
+		mountCh <- cmdResult{outb, err}
+	}()
+
+	select {
+	case <-ctx.Done():
+		log.Errorf("NodeStageVolume timed out while trying to mount volume %s. cmd: %v", req.VolumeId, cmd.Args)
+		return nil, fmt.Errorf("NodeStage Mount command timeout")
+	case result = <-mountCh:
+		if result.err != nil {
+			if result.outb != nil {
+				log.Infof("%s NodeStage Mount command returned %s", req.VolumeId, string(result.outb))
+			}
+			log.Infof("%s NodeStage Mount failed: %v : %s", req.VolumeId, cmd.Args, result.err.Error())
+			return nil, result.err
+		} else {
+			log.Infof("NodeStage Mount ALL GOOD result: %v : %s", cmd.Args, string(result.outb))
+			return &csi.NodeStageVolumeResponse{}, nil
+		}
+	}
 }
 
-func (ns *CsiNfsService) NodeUnpublishVolume(_ context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
+// isAlreadyMounted returns true if there is already a mount for that device
+func (ns *CsiNfsService) isAlreadyMounted(device string) bool {
+	out, err := ns.executor.ExecuteCommand("mount")
+	if err != nil {
+		log.Errorf("mount command failed while checking if already mounted: %s", err.Error())
+	} else {
+		lines := strings.Split(string(out), "\n")
+		for _, line := range lines {
+			if strings.Contains(line, device) {
+				log.Infof("%s isAlreadyMounted", device)
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (ns *CsiNfsService) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
+	start := time.Now()
+	// Get lock for concurrency
+	ns.LockPV(req.VolumeId, req.VolumeId, false)
+	defer ns.UnlockPV(req.VolumeId)
+	target := req.StagingTargetPath
+	if !IsNFSVolumeID(req.VolumeId) {
+		return &csi.NodeUnstageVolumeResponse{}, fmt.Errorf("nfs NodeUnstageVolume called on non NFS volume %s", req.VolumeId)
+	}
+
+	// Unmount the target directory
+	log.Infof("Attempting to unmount %s for volume %s", target, req.VolumeId)
+	out, err := ns.executor.ExecuteCommandContext(ctx, "umount", "--force", target)
+	if err != nil && !strings.Contains(err.Error(), "exit status 32") {
+		log.Infof("shared-nfs NodeUnstage umount target %s: error: %s\n%s", target, err, string(out))
+		return &csi.NodeUnstageVolumeResponse{}, err
+	}
+	log.Infof("shared-nfs NodeUnstage umount target succeeded: %s in %s:\n%s", target, time.Since(start), string(out))
+	return &csi.NodeUnstageVolumeResponse{}, nil
+}
+
+func (ns *CsiNfsService) NodePublishVolume(_ context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
+	resp := &csi.NodePublishVolumeResponse{}
+	var err error
+	start := time.Now()
+	// Get lock for concurrency
+	ns.LockPV(req.VolumeId, req.VolumeId, false)
+	defer ns.UnlockPV(req.VolumeId)
+
+	log.Infof("Making directory for NodePublish target path %s", req.TargetPath)
+	_, err = ns.executor.ExecuteCommand("mkdir", "-p", req.TargetPath)
+	if err != nil && !strings.Contains(err.Error(), "exists") {
+		return resp, fmt.Errorf("%s: Couldn't create target directory: %s", req.VolumeId, err.Error())
+	}
+
+	// Do a bind mount from the staging target to the target
+	log.Infof("NodePublishVolume %s attempting bind mount %s -> %s", req.VolumeId, req.StagingTargetPath, req.TargetPath)
+	out, err := ns.executor.ExecuteCommand("mount", "--bind", req.StagingTargetPath, req.TargetPath)
+	if err != nil {
+		log.Errorf("NodePublishVolume %s failed %s", req.VolumeId, err.Error())
+		if out != nil {
+			log.Infof("NodePublishVolume mount output: %s:", string(out))
+		}
+		return resp, err
+	}
+	log.Infof("shared-nfs NodePublishVolume mount bind target succeeded: %s in %s:\n%s", req.TargetPath, time.Since(start), string(out))
+	return resp, nil
+}
+
+func (ns *CsiNfsService) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 	start := time.Now()
 	target := req.TargetPath
 	// Get lock for concurrency
@@ -134,12 +225,15 @@ func (ns *CsiNfsService) NodeUnpublishVolume(_ context.Context, req *csi.NodeUnp
 
 	// Unmount the target directory
 	log.Infof("Attempting to unmount %s for volume %s", target, req.VolumeId)
-	out, err := ns.executor.ExecuteCommand("umount", "--force", target)
+	// --force is used in case we lose connection to the nfs client,
+	// -l (lazy) is used to defer dir cleanup and allow unmounting now, ignoring if the target is busy.
+	// TODO: use ExecuteCommandContext to cancel the request if the context times out
+	out, err := ns.executor.ExecuteCommandContext(ctx, "umount", "--force", "-l", target)
 	if err != nil && !strings.Contains(err.Error(), "exit status 32") {
 		log.Infof("shared-nfs NodeUnpublish umount target %s: error: %s\n%s", target, err, string(out))
 		return &csi.NodeUnpublishVolumeResponse{}, err
 	}
-	log.Infof("shared-nfs NodeUnpublish umount target no error: %s in %s:\n%s", target, time.Since(start), string(out))
+	log.Infof("shared-nfs NodeUnpublish umount target succeeded: %s in %s:\n%s", target, time.Since(start), string(out))
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
